@@ -9,8 +9,9 @@ public class UDPClient {
             InetAddress serverAddress = InetAddress.getByName("localhost");
             int serverPort = 2308;
             
-            //String message1 = String.format("REGISTER | 1234 | ClientName | %s | %d", serverAddress, serverPort);
-            String message1 = "hello";
+            String message1 = String.format("REGISTER | 6 | Client6 | %s | %d", serverAddress, serverPort);
+            System.out.println("message: " + message1);
+            
             byte[] sendData = message1.getBytes();
             
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, serverAddress, serverPort);
