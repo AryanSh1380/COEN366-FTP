@@ -20,7 +20,7 @@ public class Message implements Serializable {
     private int chunk;
     private String text;
 
-    // Server to client and client to server
+
     public Message(Type type, int rq) {
         this.type = type;
         this.rq = rq;
@@ -124,5 +124,6 @@ enum Type {
 }
 
 enum Reason {
+    NULL,
     UNKNOWN
 }

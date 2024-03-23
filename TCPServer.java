@@ -5,10 +5,29 @@ import java.util.List;
 
 public class TCPServer {
     private static final int PORT = 5555;
-    private static final int MAX_CLIENT = 4;
-    private static List<String> clientInfoList = new ArrayList<>();
 
     public static void main(String[] args) {
+        try {
+            SetupUDPConnection();
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    public static boolean SetupUDPConnection() throws Exception {
+        DatagramSocket socket = null;
+        try {
+            socket = new DatagramSocket();
+            socket.setSoTimeout(5000);
+            InetAddress serverAddress = InetAddress.getByName("localhost");
+            int serverPort = PORT;
+        } catch(Exception e) {
+            System.out.println(e.getMessage());
+        }
+        return true;
+    }
+
+    public static boolean SetupTCPConnection() {
         ServerSocket serverSocket = null;
         try {
             serverSocket = new ServerSocket(PORT);
@@ -29,6 +48,7 @@ public class TCPServer {
                 e.printStackTrace();
             }
         }
+        return true;
     }
 
     static class ClientHandler extends Thread {
@@ -55,7 +75,7 @@ public class TCPServer {
             try {
                 Socket archiveServerSocket = new Socket("127.0.0.1", 6666);
                 PrintWriter archiveOut = new PrintWriter(archiveServerSocket.getOutputStream(), true);
-
+                /*
                 // Debuggion: print the content of ClientInfoList
                 System.out.println("Sending client information to archive server: ");
                 for (String clientInfo : clientInfoList) {
@@ -66,6 +86,7 @@ public class TCPServer {
                 for (String clientInfo : clientInfoList) {
                     archiveOut.println(clientInfo);
                 }
+                 */
 
                 archiveOut.close();
                 archiveServerSocket.close();
