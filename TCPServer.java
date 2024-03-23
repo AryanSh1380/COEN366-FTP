@@ -40,36 +40,15 @@ public class TCPServer {
 
         public void run() {
             try {
-                BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-
-                //receive hello message from client
-                String HelloMsg = in.readLine();
-                if ("hello".equals(HelloMsg)) {
-                    out.println("send_info");
-
-                    // Receive Client information
-                    String clientId = in.readLine();
-                    String clientDesc = in.readLine();
-
-                    // Print Client information 
-                    System.out.println("Client " + clientId + " registered with description: " + clientDesc);
-
-                    // Append Client information
-                    clientInfoList.add(clientId + " " + clientDesc);
-
-                    // If all clients registered, send iventory to archive server
-                    if (clientInfoList.size() == MAX_CLIENT) {
-                        sendToArchiveServer();
-                        // Clear the list after sending to the archive server
-                        clientInfoList.clear();
-                    }
-                }
+                Message clientMessage = Message.receive(clientSocket);
+                System.out.println(clientMessage.toString());
                 clientSocket.close();
             } catch (IOException e) {
                 e.printStackTrace();
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace();
             }
-            
+
         }   
 
         private void sendToArchiveServer () {
