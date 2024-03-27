@@ -1,31 +1,99 @@
 import java.net.*;
 import java.io.*;
+import java.util.Scanner;
 
 public class TCPClient {
-    private static final String HOST = "127.0.0.1";
-    private static final int PORT = 5555;
+    private static final String SERVER_HOST = "127.0.0.1";
+    private static final int UDP_PORT = 5578;
+    private static final int TCP_PORT = 3821;
+    private static final int BUFFER_SIZE = 65535;
 
     public static void main(String[] args) {
         try {
-            Socket socket = new Socket(HOST, PORT);
-            socket.close();
-        } catch (IOException e) {
+            // UDP
+            // Communication setup
+            DatagramSocket ds = new DatagramSocket(UDP_PORT);
+            byte[] buff = new byte[BUFFER_SIZE];
+            DatagramPacket receivePacket = new DatagramPacket(buff, buff.length);
+            System.out.println("Client listening to port " + UDP_PORT);
+
+            Thread senderThread = new Thread(new SenderThread());
+            senderThread.start();
+
+            while(true){
+                // Receive
+                ds.receive(receivePacket); // Receive the packet
+                ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(receivePacket.getData()));
+                Message msg = (Message)ois.readObject();
+                System.out.println("Client received " + msg.toString());
+
+                if(msg.getType().equals(Type.FILE_REQ)) {
+                    // acquire TCP port
+                    // reply with FILE_CONF
+                }
+                // Clear buffer
+                buff = new byte[BUFFER_SIZE];
+            }
+
+        } catch(Exception e) {
             e.printStackTrace();
         }
     }
 
-    public static boolean SetupUDPConnection() throws Exception {
-        DatagramSocket socket = null;
-        try {
-            socket = new DatagramSocket();
-            socket.setSoTimeout(5000);
-            InetAddress serverAddress = InetAddress.getByName("localhost");
-            int serverPort = PORT;
-        } catch(Exception e) {
-            System.out.println(e.getMessage());
+    static class ClientHandler implements Runnable {
+        private DatagramSocket socket;
+
+        public ClientHandler(DatagramSocket socket) {
+            this.socket = socket;
         }
-        return true;
+
+        @Override
+        public void run() {
+
+        }
     }
 
-    public static boolean InitiateUDPConnection
+    static class SenderThread implements Runnable {
+        private static int rq = 1;
+        public int getNextRq() {
+            return rq++;
+        }
+        @Override
+        public void run() {
+
+            try {
+
+            // Communication setup
+            Scanner sc = new Scanner(System.in);
+            DatagramSocket ds = new DatagramSocket();
+            InetAddress ip = InetAddress.getByName(SERVER_HOST);
+            byte buffer[] = null;
+            System.out.println("Client ready to send");
+
+            while (true) {
+
+                // Trigger FILE_REQ message
+                System.out.println("Enter the UDP socket of the client to send a FILE_REQ: ");
+                String udpSocket = sc.nextLine();
+
+                // FILE_REQ message
+                Message msg = new Message(Type.FILE_REQ, rq, "hello_file.txt");
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ObjectOutputStream oos = new ObjectOutputStream(baos);
+                oos.writeObject(msg);
+                oos.flush();
+                buffer = baos.toByteArray();
+
+                // Send
+                DatagramPacket sendingPacket = new DatagramPacket(buffer, buffer.length, ip, Integer.valueOf(udpSocket));
+                ds.send(sendingPacket);
+                getNextRq();
+
+            }
+            } catch (Exception e) {
+                System.out.println(e.getMessage());
+            }
+        }
+    }
 }
+

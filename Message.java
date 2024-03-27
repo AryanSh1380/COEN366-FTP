@@ -74,16 +74,16 @@ public class Message implements Serializable {
         this.text = text;
     }
 
-    static void send(Socket socket, Message msg) throws IOException {
+    void send(Socket socket) throws IOException {
         try {
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            out.writeObject(msg);
+            out.writeObject(this);
         } catch(IOException e) {
             System.out.println(e.getMessage());
         }
     }
 
-    static Message receive(Socket socket) throws IOException, ClassNotFoundException {
+    Message receive(Socket socket) throws IOException, ClassNotFoundException {
         Message msg = null;
         try {
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
@@ -94,6 +94,78 @@ public class Message implements Serializable {
             System.out.println(e.getMessage());
         }
         return msg;
+    }
+
+    public Type getType() {
+        return type;
+    }
+
+    public void setType(Type type) {
+        this.type = type;
+    }
+
+    public int getRq() {
+        return rq;
+    }
+
+    public void setRq(int rq) {
+        this.rq = rq;
+    }
+
+    public Reason getReason() {
+        return reason;
+    }
+
+    public void setReason(Reason reason) {
+        this.reason = reason;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getIpAddress() {
+        return ipAddress;
+    }
+
+    public void setIpAddress(String ipAddress) {
+        this.ipAddress = ipAddress;
+    }
+
+    public int getSocket() {
+        return socket;
+    }
+
+    public void setSocket(int socket) {
+        this.socket = socket;
+    }
+
+    public List<TextFile> getFiles() {
+        return files;
+    }
+
+    public void setFiles(List<TextFile> files) {
+        this.files = files;
+    }
+
+    public int getChunk() {
+        return chunk;
+    }
+
+    public void setChunk(int chunk) {
+        this.chunk = chunk;
+    }
+
+    public String getText() {
+        return text;
+    }
+
+    public void setText(String text) {
+        this.text = text;
     }
 
     @Override

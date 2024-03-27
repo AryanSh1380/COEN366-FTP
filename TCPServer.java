@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TCPServer {
+    /*
     private static final int PORT = 5555;
 
     public static void main(String[] args) {
@@ -87,12 +88,4 @@ public class TCPServer {
                     archiveOut.println(clientInfo);
                 }
                  */
-
-                archiveOut.close();
-                archiveServerSocket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
 }
