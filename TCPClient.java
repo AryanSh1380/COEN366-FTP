@@ -1,36 +1,65 @@
 import java.net.*;
 import java.io.*;
+import java.util.Random;
 import java.util.Scanner;
 
 public class TCPClient {
-    private static final String SERVER_HOST = "127.0.0.1";
-    private static final int UDP_PORT = 5578;
-    private static final int TCP_PORT = 3821;
+    private static final String HOST = "127.0.0.1";
+    private static final int UDP_PORT = 5599;
     private static final int BUFFER_SIZE = 65535;
 
+    private static final int MIN_PORT_NUMBER = 1025;
+    private static final int MAX_PORT_NUMBER = 65535;
+
+    private static int rq = 1;
     public static void main(String[] args) {
         try {
-            // UDP
-            // Communication setup
+
+            // Listening to incoming messages on selected UDP port
             DatagramSocket ds = new DatagramSocket(UDP_PORT);
             byte[] buff = new byte[BUFFER_SIZE];
             DatagramPacket receivePacket = new DatagramPacket(buff, buff.length);
             System.out.println("Client listening to port " + UDP_PORT);
 
-            Thread senderThread = new Thread(new SenderThread());
+            // Start sender thread
+            SenderThread st = new SenderThread();
+            Thread senderThread = new Thread(st);
             senderThread.start();
 
             while(true){
-                // Receive
-                ds.receive(receivePacket); // Receive the packet
+                // Receive packet
+                ds.receive(receivePacket);
+                InetAddress senderIp = receivePacket.getAddress();
+                int senderUdpPort = receivePacket.getPort();
+                System.out.println(senderIp + " " + senderUdpPort);
+
                 ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(receivePacket.getData()));
                 Message msg = (Message)ois.readObject();
                 System.out.println("Client received " + msg.toString());
 
                 if(msg.getType().equals(Type.FILE_REQ)) {
-                    // acquire TCP port
+
                     // reply with FILE_CONF
+                    byte[] buffer = null;
+
+                    // FILE_CONF message
+                    Message m = new Message(Type.FILE_CONF, msg.getRq(), acquireTCPPort());
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    ObjectOutputStream oos = new ObjectOutputStream(baos);
+                    oos.writeObject(m);
+                    oos.flush();
+                    buffer = baos.toByteArray();
+
+                    // Send
+                    DatagramPacket sendingPacket = new DatagramPacket(buffer, buffer.length, senderIp, senderUdpPort);
+                    ds.send(sendingPacket);
+
                 }
+
+                if(msg.getType().equals(Type.FILE_CONF)) {
+                    // setup TCP communication on given port
+                }
+
                 // Clear buffer
                 buff = new byte[BUFFER_SIZE];
             }
@@ -38,6 +67,11 @@ public class TCPClient {
         } catch(Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public static int acquireTCPPort() {
+        Random r = new Random();
+        return r.nextInt(MAX_PORT_NUMBER - MIN_PORT_NUMBER) + MIN_PORT_NUMBER;
     }
 
     static class ClientHandler implements Runnable {
@@ -55,9 +89,11 @@ public class TCPClient {
 
     static class SenderThread implements Runnable {
         private static int rq = 1;
+
         public int getNextRq() {
             return rq++;
         }
+
         @Override
         public void run() {
 
@@ -66,8 +102,8 @@ public class TCPClient {
             // Communication setup
             Scanner sc = new Scanner(System.in);
             DatagramSocket ds = new DatagramSocket();
-            InetAddress ip = InetAddress.getByName(SERVER_HOST);
-            byte buffer[] = null;
+            InetAddress ip = InetAddress.getByName(HOST); // change that
+            byte[] buffer = null;
             System.out.println("Client ready to send");
 
             while (true) {
