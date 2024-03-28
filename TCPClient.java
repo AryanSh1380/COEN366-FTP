@@ -5,7 +5,7 @@ import java.util.Scanner;
 
 public class TCPClient {
     private static final String HOST = "127.0.0.1";
-    private static final int UDP_PORT = 5599;
+    private static final int UDP_PORT = 5555;
     private static final int BUFFER_SIZE = 65535;
 
     private static final int MIN_PORT_NUMBER = 1025;
@@ -22,20 +22,21 @@ public class TCPClient {
             System.out.println("Client listening to port " + UDP_PORT);
 
             // Start sender thread
-            SenderThread st = new SenderThread();
-            Thread senderThread = new Thread(st);
+            Thread senderThread = new Thread(new SenderThread(ds));
             senderThread.start();
 
             while(true){
                 // Receive packet
                 ds.receive(receivePacket);
-                InetAddress senderIp = receivePacket.getAddress();
-                int senderUdpPort = receivePacket.getPort();
-                System.out.println(senderIp + " " + senderUdpPort);
 
                 ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(receivePacket.getData()));
                 Message msg = (Message)ois.readObject();
                 System.out.println("Client received " + msg.toString());
+
+                // Client information
+                InetAddress senderIp = receivePacket.getAddress();
+                int senderUdpPort = receivePacket.getPort();
+                System.out.println("Client address " + senderIp + " " + senderUdpPort);
 
                 if(msg.getType().equals(Type.FILE_REQ)) {
 
@@ -89,9 +90,14 @@ public class TCPClient {
 
     static class SenderThread implements Runnable {
         private static int rq = 1;
+        private DatagramSocket socket;
 
         public int getNextRq() {
             return rq++;
+        }
+
+        SenderThread(DatagramSocket datagramSocket){
+            socket = datagramSocket;
         }
 
         @Override
@@ -101,7 +107,6 @@ public class TCPClient {
 
             // Communication setup
             Scanner sc = new Scanner(System.in);
-            DatagramSocket ds = new DatagramSocket();
             InetAddress ip = InetAddress.getByName(HOST); // change that
             byte[] buffer = null;
             System.out.println("Client ready to send");
@@ -122,7 +127,7 @@ public class TCPClient {
 
                 // Send
                 DatagramPacket sendingPacket = new DatagramPacket(buffer, buffer.length, ip, Integer.valueOf(udpSocket));
-                ds.send(sendingPacket);
+                socket.send(sendingPacket);
                 getNextRq();
 
             }
