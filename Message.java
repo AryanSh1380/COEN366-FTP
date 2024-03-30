@@ -74,7 +74,7 @@ public class Message implements Serializable {
         this.text = text;
     }
 
-    void send(Socket socket) throws IOException {
+    public void send(Socket socket) throws IOException {
         try {
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
             out.writeObject(this);
@@ -83,7 +83,7 @@ public class Message implements Serializable {
         }
     }
 
-    Message receive(Socket socket) throws IOException, ClassNotFoundException {
+    public static Message receive(Socket socket) throws IOException, ClassNotFoundException {
         Message msg = null;
         try {
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());

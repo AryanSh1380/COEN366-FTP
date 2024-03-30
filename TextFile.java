@@ -1,5 +1,6 @@
 import java.io.File;
 import java.io.Serializable;
+import java.net.URI;
 
 public class TextFile extends File implements Serializable {
 
@@ -8,6 +9,10 @@ public class TextFile extends File implements Serializable {
 
     public TextFile(String pathname) {
         super(pathname);
+    }
+
+    public TextFile(URI uri) {
+        super(uri);
     }
 
     public String getFilename() {
