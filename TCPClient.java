@@ -45,11 +45,11 @@ public class TCPClient {
                 if(msg.getType().equals(Type.FILE_REQ)) { // ADD CHECK TO SEE IF CLIENT OWNS THE FILE BEFORE SENDING FILE_CONF
 
                     int tcpPort = acquireTCPPort(); // Get a random TCP port
-                    Message fileConfMsg = new Message(Type.FILE_CONF, msg.getRq(), tcpPort); // Send the file conf message to the client who requested the file
-                    fileConfMsg.send(senderIp, senderUdpPort, ds);
+                    Message fileConf = new Message(Type.FILE_CONF, msg.getRq(), tcpPort); // Send a file conf message to the client who requested the file
+                    fileConf.send(senderIp, senderUdpPort, ds);
 
                     // Wait for other client to be ready to receive the file
-                    sleep(1000);
+                    sleep(2000);
 
                     // Send file over provided TCP socket
                     Socket tcpSocket = new Socket(InetAddress.getByName(HOST), tcpPort);
@@ -63,11 +63,18 @@ public class TCPClient {
                     ServerSocket server = new ServerSocket(msg.getSocket(),1, senderIp);
                     Socket client = server.accept();
                     System.out.println("Client waiting for file");
+                    BufferedWriter bw = new BufferedWriter(new FileWriter("temp.txt"));
                     Message file = null;
                     while(file == null || !file.getType().equals(Type.FILE_END)){
                         file = Message.receive(client);
                         System.out.println("Client received " + file.toString());
+                        // Put file back together
+                        bw.write(file.getText());
+                        bw.flush();
                     }
+                    String filename = file.getName();
+                    // RENAME AND ADD TO LIST OF OWNED FILE
+                    bw.close();
                     // Close the sockets created to receive the file
                     client.close();
                     server.close();
