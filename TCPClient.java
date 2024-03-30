@@ -30,7 +30,7 @@ public class TCPClient {
             System.out.println("Client listening to port " + UDP_PORT);
 
             // Start sender thread
-            Thread senderThread = new Thread(new SenderThread(ds));
+            Thread senderThread = new Thread(new RequestSender(ds));
             senderThread.start();
 
             while(true){
@@ -66,31 +66,10 @@ public class TCPClient {
 
                     sleep(1000);
                     // Send file over provided TCP socket
-                    Socket sckt = new Socket(InetAddress.getByName(HOST), tcpPort);
-                    TextFile file = new TextFile(msg.getName());
-                    try  {
-                        FileReader fr = new FileReader(file);
-                        BufferedReader br = new BufferedReader(fr);
-                        char[] buf = new char[200];
-                        int ch;
-                        Message mess = new Message(Type.FILE, msg.getRq(), msg.getName());
-                        int chunk = 1;
-                        while ((ch = br.read(buf, 0, buf.length)) != -1) {
-                            // Process the content read
-                            String text = new String(buf, 0, ch);
-                            mess.setText(text);
-                            mess.setChunk(chunk);
-                            chunk++;
-                            if(text.toCharArray().length < 200){
-                                mess.setType(Type.FILE_END);
-                            }
-                            mess.send(sckt);
-                        }
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+                    Socket tcpSocket = new Socket(InetAddress.getByName(HOST), tcpPort);
+                    Thread fileSender = new Thread(new FileSender(tcpSocket, msg.getRq(), msg.getName()));
+                    fileSender.start();
                 }
-
 
                 // Setup TCP communication on given port
                 if(msg.getType().equals(Type.FILE_CONF)) {
@@ -121,21 +100,46 @@ public class TCPClient {
         return r.nextInt(MAX_PORT_NUMBER - MIN_PORT_NUMBER) + MIN_PORT_NUMBER;
     }
 
-    static class ClientHandler implements Runnable {
-        private DatagramSocket socket;
+    static class FileSender implements Runnable {
+        private Socket socket;
+        private int rq;
+        private String filename;
 
-        public ClientHandler(DatagramSocket socket) {
+        public FileSender(Socket socket, int rq, String filename) {
             this.socket = socket;
+            this.filename = filename;
+            this.rq = rq;
         }
 
         @Override
         public void run() {
-
-
+            // Send file over provided TCP socket
+            TextFile file = new TextFile(filename);
+            try  {
+                FileReader fr = new FileReader(file);
+                BufferedReader br = new BufferedReader(fr);
+                char[] buf = new char[200];
+                int ch;
+                Message mess = new Message(Type.FILE, rq, filename);
+                int chunk = 1;
+                while ((ch = br.read(buf, 0, buf.length)) != -1) {
+                    // Process the content read
+                    String text = new String(buf, 0, ch);
+                    mess.setText(text);
+                    mess.setChunk(chunk);
+                    chunk++;
+                    if(text.toCharArray().length < 200){
+                        mess.setType(Type.FILE_END);
+                    }
+                    mess.send(socket);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
-    static class SenderThread implements Runnable {
+    static class RequestSender implements Runnable {
         private static int rq = 1;
         private DatagramSocket socket;
 
@@ -143,7 +147,7 @@ public class TCPClient {
             return rq++;
         }
 
-        SenderThread(DatagramSocket datagramSocket){
+        RequestSender(DatagramSocket datagramSocket){
             socket = datagramSocket;
         }
 
