@@ -1,7 +1,7 @@
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
+import java.io.*;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.util.List;
 
@@ -74,15 +74,29 @@ public class Message implements Serializable {
         this.text = text;
     }
 
+    // Send message over TCP
     public void send(Socket socket) throws IOException {
-        try {
-            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            out.writeObject(this);
-        } catch(IOException e) {
-            System.out.println(e.getMessage());
-        }
+        ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+        out.writeObject(this);
+        out.flush();
+
     }
 
+    // Send message over UDP
+    public void send(InetAddress ip, int port, DatagramSocket socket) throws IOException {
+        // Setup
+        byte[] buffer = null;
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(baos);
+        oos.writeObject(this);
+        oos.flush();
+        buffer = baos.toByteArray();
+        // Send
+        DatagramPacket sendingPacket = new DatagramPacket(buffer, buffer.length, ip, port);
+        socket.send(sendingPacket);
+    }
+
+    // Receive message over TCP
     public static Message receive(Socket socket) throws IOException, ClassNotFoundException {
         Message msg = null;
         try {

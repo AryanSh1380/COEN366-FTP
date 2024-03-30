@@ -10,84 +10,71 @@ public class TCPClient {
     private static int UDP_PORT;
     private static final int BUFFER_SIZE = 65535;
 
-    private static final int MIN_PORT_NUMBER = 1025;
-    private static final int MAX_PORT_NUMBER = 65535;
-
-    private static int rq = 1;
-
     public static void main(String[] args) {
-        try {
 
+        try {
+            // Request the client UDP port
             Scanner sc = new Scanner(System.in);
-            System.out.println("Enter UDP port for the client ");
+            System.out.println("Enter UDP port for the client");
             String port = sc.nextLine();
             UDP_PORT = Integer.valueOf(port);
 
-            // Listening to incoming messages on selected UDP port
+            // Listen to incoming messages on selected UDP port
             DatagramSocket ds = new DatagramSocket(UDP_PORT);
-            byte[] buff = new byte[BUFFER_SIZE];
-            DatagramPacket receivePacket = new DatagramPacket(buff, buff.length);
+            byte[] buffer = new byte[BUFFER_SIZE];
+            DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
             System.out.println("Client listening to port " + UDP_PORT);
 
-            // Start sender thread
-            Thread senderThread = new Thread(new RequestSender(ds));
+            // Start thread to send file requests to other clients
+            Thread senderThread = new Thread(new RequestSender(InetAddress.getByName(HOST), ds));
             senderThread.start();
+            System.out.println("Enter the UDP socket of the client followed by the file name to send a FILE_REQ");
 
             while(true){
-
                 // Receive packet
                 ds.receive(receivePacket);
                 ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(receivePacket.getData()));
                 Message msg = (Message)ois.readObject();
                 System.out.println("Client received " + msg.toString());
 
-                // Client information
+                // Extract client information
                 InetAddress senderIp = receivePacket.getAddress();
                 int senderUdpPort = receivePacket.getPort();
 
-                // Reply with FILE_CONF
-                // First check if client owns the file
-                if(msg.getType().equals(Type.FILE_REQ)) {
+                // Client received a file request
+                if(msg.getType().equals(Type.FILE_REQ)) { // ADD CHECK TO SEE IF CLIENT OWNS THE FILE BEFORE SENDING FILE_CONF
 
-                    byte[] buffer = null;
+                    int tcpPort = acquireTCPPort(); // Get a random TCP port
+                    Message fileConfMsg = new Message(Type.FILE_CONF, msg.getRq(), tcpPort); // Send the file conf message to the client who requested the file
+                    fileConfMsg.send(senderIp, senderUdpPort, ds);
 
-                    // FILE_CONF message
-                    int tcpPort = acquireTCPPort();
-                    Message m = new Message(Type.FILE_CONF, msg.getRq(), tcpPort);
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    ObjectOutputStream oos = new ObjectOutputStream(baos);
-                    oos.writeObject(m);
-                    oos.flush();
-                    buffer = baos.toByteArray();
-
-                    // Send
-                    DatagramPacket sendingPacket = new DatagramPacket(buffer, buffer.length, senderIp, senderUdpPort);
-                    ds.send(sendingPacket);
-
+                    // Wait for other client to be ready to receive the file
                     sleep(1000);
+
                     // Send file over provided TCP socket
                     Socket tcpSocket = new Socket(InetAddress.getByName(HOST), tcpPort);
                     Thread fileSender = new Thread(new FileSender(tcpSocket, msg.getRq(), msg.getName()));
                     fileSender.start();
                 }
 
-                // Setup TCP communication on given port
+                // Client received a file conf
                 if(msg.getType().equals(Type.FILE_CONF)) {
-
                     // Wait for file over provided TCP socket
                     ServerSocket server = new ServerSocket(msg.getSocket(),1, senderIp);
                     Socket client = server.accept();
+                    System.out.println("Client waiting for file");
                     Message file = null;
                     while(file == null || !file.getType().equals(Type.FILE_END)){
                         file = Message.receive(client);
                         System.out.println("Client received " + file.toString());
                     }
+                    // Close the sockets created to receive the file
                     client.close();
                     server.close();
                 }
 
                 // Clear buffer
-                buff = new byte[BUFFER_SIZE];
+                buffer = new byte[BUFFER_SIZE];
             }
 
         } catch(Exception e) {
@@ -96,11 +83,16 @@ public class TCPClient {
     }
 
     public static int acquireTCPPort() {
+        final int MIN_PORT_NUMBER = 1025;
+        final int MAX_PORT_NUMBER = 65535;
         Random r = new Random();
         return r.nextInt(MAX_PORT_NUMBER - MIN_PORT_NUMBER) + MIN_PORT_NUMBER;
     }
 
     static class FileSender implements Runnable {
+        private static final int MAX_CHAR = 200;
+        private static final int EOF = -1;
+        private static final int FILE_OFFSET = 0;
         private Socket socket;
         private int rq;
         private String filename;
@@ -111,27 +103,29 @@ public class TCPClient {
             this.rq = rq;
         }
 
+        // Send requested file over provided TCP socket
         @Override
         public void run() {
-            // Send file over provided TCP socket
             TextFile file = new TextFile(filename);
             try  {
+                // Setup to read file character by character
                 FileReader fr = new FileReader(file);
                 BufferedReader br = new BufferedReader(fr);
-                char[] buf = new char[200];
+                char[] buffer = new char[MAX_CHAR];
                 int ch;
-                Message mess = new Message(Type.FILE, rq, filename);
                 int chunk = 1;
-                while ((ch = br.read(buf, 0, buf.length)) != -1) {
-                    // Process the content read
-                    String text = new String(buf, 0, ch);
-                    mess.setText(text);
-                    mess.setChunk(chunk);
+                Message msg = new Message(Type.FILE, rq, filename);
+
+                // Read the file character by character
+                while ((ch = br.read(buffer, FILE_OFFSET, buffer.length)) != EOF) {
+                    String text = new String(buffer, FILE_OFFSET, ch); // Get the text
+                    msg.setText(text);
+                    msg.setChunk(chunk); // Update the message attributes
                     chunk++;
-                    if(text.toCharArray().length < 200){
-                        mess.setType(Type.FILE_END);
+                    if(text.toCharArray().length < MAX_CHAR) { // Special END_FILE message for last chunk
+                        msg.setType(Type.FILE_END);
                     }
-                    mess.send(socket);
+                    msg.send(socket); // Send the message over TCP socket
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -140,52 +134,38 @@ public class TCPClient {
     }
 
     static class RequestSender implements Runnable {
-        private static int rq = 1;
+        InetAddress ip;
         private DatagramSocket socket;
-
-        public int getNextRq() {
-            return rq++;
+        private static int rq = 1;
+        RequestSender(InetAddress ip, DatagramSocket socket){
+            this.socket = socket;
+            this.ip = ip;
         }
 
-        RequestSender(DatagramSocket datagramSocket){
-            socket = datagramSocket;
-        }
-
+        // Send file requests to another client
         @Override
         public void run() {
-
             try {
-
             // Communication setup
             Scanner sc = new Scanner(System.in);
-            InetAddress ip = InetAddress.getByName(HOST); // change that
-            byte[] buffer = null;
-            System.out.println("Client ready to send");
+            System.out.println("Client ready to send file requests");
 
+            // Wait for user to provide the client port and the file to request
             while (true) {
-
-                // Trigger FILE_REQ message
-                System.out.println("Enter the UDP socket of the client followed by the file name to send a FILE_REQ: ");
-                String udpSocket = sc.nextLine();
+                String clientPort = sc.nextLine();
                 String filename = sc.nextLine();
 
-                // FILE_REQ message
+                // Send FILE_REQ message
                 Message msg = new Message(Type.FILE_REQ, rq, filename);
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                ObjectOutputStream oos = new ObjectOutputStream(baos);
-                oos.writeObject(msg);
-                oos.flush();
-                buffer = baos.toByteArray();
-
-                // Send
-                DatagramPacket sendingPacket = new DatagramPacket(buffer, buffer.length, ip, Integer.valueOf(udpSocket));
-                socket.send(sendingPacket);
+                msg.send(ip, Integer.valueOf(clientPort), socket);
                 getNextRq();
-
             }
             } catch (Exception e) {
                 System.out.println(e.getMessage());
             }
+        }
+        public int getNextRq() {
+            return rq++;
         }
     }
 }
