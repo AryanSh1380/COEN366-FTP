@@ -35,7 +35,7 @@ public class TCPClient {
                 ds.receive(receivePacket);
                 ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(receivePacket.getData()));
                 Message msg = (Message)ois.readObject();
-                System.out.println("Client received " + msg.toString());
+                System.out.println("\nClient received " + msg.toString());
 
                 // Extract client information
                 InetAddress senderIp = receivePacket.getAddress();
@@ -49,7 +49,7 @@ public class TCPClient {
                     fileConf.send(senderIp, senderUdpPort, ds);
 
                     // Wait for other client to be ready to receive the file
-                    sleep(2000);
+                    //sleep(2000);
 
                     // Send file over provided TCP socket
                     Socket tcpSocket = new Socket(InetAddress.getByName(HOST), tcpPort);
@@ -59,6 +59,9 @@ public class TCPClient {
 
                 // Client received a file conf
                 if(msg.getType().equals(Type.FILE_CONF)) {
+                    Thread fileReceiver = new Thread(new FileReceiver(senderIp, msg.getSocket()));
+                    fileReceiver.start();
+                    /*
                     // Wait for file over provided TCP socket
                     ServerSocket server = new ServerSocket(msg.getSocket(),1, senderIp);
                     Socket client = server.accept();
@@ -72,12 +75,13 @@ public class TCPClient {
                         bw.write(file.getText());
                         bw.flush();
                     }
-                    String filename = file.getName();
+                    */
+                    //String filename = file.getName();
                     // RENAME AND ADD TO LIST OF OWNED FILE
-                    bw.close();
+                    //bw.close();
                     // Close the sockets created to receive the file
-                    client.close();
-                    server.close();
+                    //client.close();
+                   // server.close();
                 }
 
                 // Clear buffer
@@ -87,6 +91,7 @@ public class TCPClient {
         } catch(Exception e) {
             e.printStackTrace();
         }
+
     }
 
     public static int acquireTCPPort() {
@@ -94,6 +99,45 @@ public class TCPClient {
         final int MAX_PORT_NUMBER = 65535;
         Random r = new Random();
         return r.nextInt(MAX_PORT_NUMBER - MIN_PORT_NUMBER) + MIN_PORT_NUMBER;
+    }
+
+    static class FileReceiver implements Runnable {
+        InetAddress senderIp;
+        private int socket;
+        private static final int BACKLOG_SIZE = 1;
+
+        FileReceiver(InetAddress senderIp, int socket) {
+            this.senderIp = senderIp;
+            this.socket = socket;
+        }
+
+        // Wait for file over provided TCP socket
+        @Override
+        public void run() {
+            try {
+                ServerSocket server = new ServerSocket(socket, BACKLOG_SIZE, senderIp);
+                Socket client = server.accept();
+                System.out.println("Client waiting for file");
+                BufferedWriter bw = new BufferedWriter(new FileWriter("temp.txt"));
+                Message file = null;
+                while (file == null || !file.getType().equals(Type.FILE_END)) {
+                    // ADD TIMEOUT IF CLIENT DOES NOT RECEIVE ANYTHING
+                    file = Message.receive(client);
+                    System.out.println("Client received " + file.toString());
+                    // Put file back together
+                    bw.write(file.getText());
+                    bw.flush();
+                }
+                String filename = file.getName();
+                // RENAME AND ADD TO LIST OF OWNED FILE
+                bw.close();
+                // Close the sockets created to receive the file
+                client.close();
+                server.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     static class FileSender implements Runnable {
