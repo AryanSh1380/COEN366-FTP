@@ -2,22 +2,37 @@ import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.ObjectOutputStream;
 
 public class UDPClient {
+    private static Message msg;
     public static void main(String[] args) {
         DatagramSocket socket = null;
         try {
             socket = new DatagramSocket();
             socket.setSoTimeout(5000);
 
-            InetAddress serverAddress = InetAddress.getByName("localhost");
-            int serverPort = 2308;
+            InetAddress clientAddress = InetAddress.getByName("localhost");
+            int clientPort = 2308;
 
             Scanner scanner = new Scanner(System.in);
             File directory = new File(".");
-            List<String> filenames = new ArrayList<>();
+            List<String> filenamesToPublish = new ArrayList<>();
+            List<String> filenamesToRemove = new ArrayList<>();
+
+            System.out.print("Enter Client Name: ");
+            String clientName = scanner.nextLine();
+
+            System.out.print("Enter Server address: ");
+            String serverIP = scanner.nextLine();
+            InetAddress serverAddress = InetAddress.getByName(serverIP);
             
+            System.out.print("Enter Server Port Number: ");
+            int serverPort = scanner.nextInt();
+
+            int reqNumb = 0;
             loop: while(!socket.isClosed()) {
                 // Displaying menu options
                 System.out.println("Select an option:");
@@ -30,45 +45,31 @@ public class UDPClient {
 
                 // Reading user input
                 int choice = scanner.nextInt();
-                
+                reqNumb++;
                 String message = "";
-
+                
                 switch (choice) {
                     case 1:
-                        message = String.format("REGISTER | 6 | Client6 | NAME | | %s | %d", serverAddress, serverPort);
-                        System.out.println("message: " + message);
+                        msg = new Message(Type.REGISTER, reqNumb, clientName, clientAddress, clientPort);
                         break;
 
                     case 2:
                         File[] files = directory.listFiles();
-                        if (files != null) {
-                            for (File file : files) {
-                                if (file.isFile()) {
-                                    filenames.add(file.getName());
-                                }
-                            }
+                        for (int i = 0; i < files.length; i++) {
+                            filenamesToPublish.add(files[i].getName());
                         }
-                        
-                        StringBuilder concatenatedFilenames = new StringBuilder();
-                        for (int i = 0; i < filenames.size(); i++) {
-                            concatenatedFilenames.append(filenames.get(i));
-                            if (i < filenames.size() - 1) {
-                                concatenatedFilenames.append(" | ");
-                            }
-                        }
+                        msg = new Message(Type.PUBLISH, reqNumb, clientName, filenamesToPublish);
+                        break;
 
-                        message = String.format("PUBLISH | 6 | Client6 | FileName1 | %s",concatenatedFilenames.toString());
-                        System.out.println("message: " + message);
-                        break;
                     case 3:
-                        message = String.format("DEREGISTER | 6 | Client6");
-                        System.out.println("message: " + message);
+                        msg = new Message(Type.DEREGISTER, reqNumb, clientName);
                         break;
-                    
+                        
                     case 4:
-                        String fileToRemove = "Main.java | UDPClient.java | UDPServer.java"; 
-                        message = String.format("REMOVE | 6 | Client6 | %s", fileToRemove);
-                        System.out.println("message: " + message);
+                        filenamesToRemove.add("Main.java");
+                        filenamesToRemove.add("UDPClient.java");
+                        filenamesToRemove.add("UDPServer.java");
+                        msg = new Message(Type.REMOVE, reqNumb, clientName, filenamesToRemove);
                         break;
 
                     case 5:
@@ -78,9 +79,13 @@ public class UDPClient {
                         System.out.println("Invalid choice!");
                 }
             
-                byte[] sendData = message.getBytes();
+                ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+                ObjectOutputStream out = new ObjectOutputStream(byteStream);
+                out.writeObject(msg);
+                out.flush();
+                byte[] serializedObj = byteStream.toByteArray();
                 
-                DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, serverAddress, serverPort);
+                DatagramPacket sendPacket = new DatagramPacket(serializedObj, serializedObj.length, serverAddress, serverPort);
                 socket.send(sendPacket);
 
                 byte[] receiveData = new byte[1024];
@@ -90,6 +95,7 @@ public class UDPClient {
                 String receivedMessage = new String(receivePacket.getData(), 0, receivePacket.getLength());
                 System.out.println("Server: " + receivedMessage);
             }
+            scanner.close();
         } catch (SocketTimeoutException e) {
             System.err.println("Timeout occured: Server did not respond.");
         } catch (Exception e) {
