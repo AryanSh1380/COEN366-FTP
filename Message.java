@@ -1,7 +1,6 @@
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
+import java.io.*;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.List;
@@ -17,6 +16,10 @@ public class Message implements Serializable {
     private int socketNum;
     private int UDPport;
     private List<String> filenames;
+
+    // Client to client
+    private int chunk;
+    private String text;
 
     public int getUDPport() {
         return UDPport;
@@ -42,16 +45,31 @@ public class Message implements Serializable {
         return filenames;
     }
 
-    // Client to client
-    private int chunk;
-    private String text;
-
     public Type getType() {
         return type;
     }
 
     public int getRq() {
         return rq;
+    }
+
+    public String getText(){
+        return text;
+    }
+
+    public int getChunk(){
+        return chunk;
+    }
+
+    void setType(Type type) {
+        this.type = type;
+    }
+    public void setText(String text) {
+        this.text = text;
+    }
+
+    public void setChunk(int chunk) {
+        this.chunk = chunk;
     }
 
     // [REGISTERED | RQ#] (server)
@@ -119,16 +137,30 @@ public class Message implements Serializable {
         this.text = text;
     }
 
-    static void send(Socket socket, Message msg) throws IOException {
-        try {
-            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            out.writeObject(msg);
-        } catch(IOException e) {
-            System.out.println(e.getMessage());
-        }
+    // Send message over TCP
+    public void send(Socket socket) throws IOException {
+        ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+        out.writeObject(this);
+        out.flush();
+
     }
 
-    static Message receive(Socket socket) throws IOException, ClassNotFoundException {
+    // Send message over UDP
+    public void send(InetAddress ip, int port, DatagramSocket socket) throws IOException {
+        // Setup
+        byte[] buffer = null;
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(baos);
+        oos.writeObject(this);
+        oos.flush();
+        buffer = baos.toByteArray();
+        // Send
+        DatagramPacket sendingPacket = new DatagramPacket(buffer, buffer.length, ip, port);
+        socket.send(sendingPacket);
+    }
+
+    // Receive message over TCP
+    public static Message receive(Socket socket) throws IOException, ClassNotFoundException {
         Message msg = null;
         try {
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());

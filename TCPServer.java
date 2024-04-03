@@ -4,11 +4,31 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TCPServer {
+    /*
     private static final int PORT = 5555;
-    private static final int MAX_CLIENT = 4;
-    private static List<String> clientInfoList = new ArrayList<>();
 
     public static void main(String[] args) {
+        try {
+            SetupUDPConnection();
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    public static boolean SetupUDPConnection() throws Exception {
+        DatagramSocket socket = null;
+        try {
+            socket = new DatagramSocket();
+            socket.setSoTimeout(5000);
+            InetAddress serverAddress = InetAddress.getByName("localhost");
+            int serverPort = PORT;
+        } catch(Exception e) {
+            System.out.println(e.getMessage());
+        }
+        return true;
+    }
+
+    public static boolean SetupTCPConnection() {
         ServerSocket serverSocket = null;
         try {
             serverSocket = new ServerSocket(PORT);
@@ -29,6 +49,7 @@ public class TCPServer {
                 e.printStackTrace();
             }
         }
+        return true;
     }
 
     static class ClientHandler extends Thread {
@@ -40,43 +61,22 @@ public class TCPServer {
 
         public void run() {
             try {
-                BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-
-                //receive hello message from client
-                String HelloMsg = in.readLine();
-                if ("hello".equals(HelloMsg)) {
-                    out.println("send_info");
-
-                    // Receive Client information
-                    String clientId = in.readLine();
-                    String clientDesc = in.readLine();
-
-                    // Print Client information 
-                    System.out.println("Client " + clientId + " registered with description: " + clientDesc);
-
-                    // Append Client information
-                    clientInfoList.add(clientId + " " + clientDesc);
-
-                    // If all clients registered, send iventory to archive server
-                    if (clientInfoList.size() == MAX_CLIENT) {
-                        sendToArchiveServer();
-                        // Clear the list after sending to the archive server
-                        clientInfoList.clear();
-                    }
-                }
+                Message clientMessage = Message.receive(clientSocket);
+                System.out.println(clientMessage.toString());
                 clientSocket.close();
             } catch (IOException e) {
                 e.printStackTrace();
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace();
             }
-            
+
         }   
 
         private void sendToArchiveServer () {
             try {
                 Socket archiveServerSocket = new Socket("127.0.0.1", 6666);
                 PrintWriter archiveOut = new PrintWriter(archiveServerSocket.getOutputStream(), true);
-
+                /*
                 // Debuggion: print the content of ClientInfoList
                 System.out.println("Sending client information to archive server: ");
                 for (String clientInfo : clientInfoList) {
@@ -87,12 +87,5 @@ public class TCPServer {
                 for (String clientInfo : clientInfoList) {
                     archiveOut.println(clientInfo);
                 }
-
-                archiveOut.close();
-                archiveServerSocket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
+                 */
 }
