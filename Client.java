@@ -9,7 +9,7 @@ public class Client {
     private List<String> listOfFiles;
     
     public Client(String clientName, InetAddress clientAddress, Integer clientPort) {
-        listOfFiles = new ArrayList<String>();
+        listOfFiles = new ArrayList<>();
         this.clientName = clientName;
         this.clientAddress = clientAddress;
         this.clientPort = clientPort;

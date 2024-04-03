@@ -113,17 +113,17 @@ public class TCPClient {
         // Send requested file over provided TCP socket
         @Override
         public void run() {
-            TextFile file = new TextFile(filename);
+            TextFile textFile = new TextFile(new File(filename));
             try  {
-                // Setup to read file character by character
-                FileReader fr = new FileReader(file);
+                // Setup to read textFile character by character
+                FileReader fr = new FileReader(textFile.getFile());
                 BufferedReader br = new BufferedReader(fr);
                 char[] buffer = new char[MAX_CHAR];
                 int ch;
                 int chunk = 1;
                 Message msg = new Message(Type.FILE, rq, filename);
 
-                // Read the file character by character
+                // Read the textFile character by character
                 while ((ch = br.read(buffer, FILE_OFFSET, buffer.length)) != EOF) {
                     String text = new String(buffer, FILE_OFFSET, ch); // Get the text
                     msg.setText(text);

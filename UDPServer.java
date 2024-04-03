@@ -1,39 +1,58 @@
+import java.io.ByteArrayInputStream;
+import java.io.ObjectInputStream;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class UDPServer {
     static private List<Client> clients = new ArrayList<>();
-
+    static private List<String> filenamesToRemove = new ArrayList<>();
+    static private List<String> filenamesToPublish = new ArrayList<>();
+    static private boolean ServerUpdate = false;
+    static private DatagramSocket socket;
+    static private Timer timer;
+    static private long timerPeriod = 10000;
     public static void main(String[] args) {
-        DatagramSocket socket = null;
         try {
             socket = new DatagramSocket(2308);
+            timer = new Timer();
+            timer.schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    UDPServer.updateAllClients(socket);
+                }
+            }, 0, timerPeriod);
             while(!socket.isClosed()) {
                 byte[] buffer = new byte[1024];
                 DatagramPacket request = new DatagramPacket(buffer, buffer.length);
                 socket.receive(request);
 
-                String message = new String(request.getData(), 0, request.getLength());
+                byte[] receivedData = request.getData();
+                ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(receivedData));
+                Message msg = (Message) in.readObject();
+               
+                // String message = new String(request.getData(), 0, request.getLength());
                 InetAddress clientAddress = request.getAddress();
                 Integer clientPort = request.getPort();
 
-                String[] parts = message.split("\\|");
-                String commandType = parts[0].trim();
+                // String[] parts = message.split("\\|");
+                // String commandType = parts[0].trim();
                 String response = "";
 
-                switch (commandType) {
-                    case "REGISTER":
-                        response = handleRegisterCommand(parts, clientAddress, clientPort);
+                switch (msg.getType()) {
+                    case REGISTER:
+                        response = handleRegisterCommand(msg);
                         break;
-                    case "DEREGISTER":
-                        response = handleDeregisterCommand(parts);
+                    case DEREGISTER:
+                        response = handleDeregisterCommand(msg);
                         break;
-                    case "PUBLISH":
-                        response = handlePublishCommand(parts);
+                    case PUBLISH:
+                        response = handlePublishCommand(msg);
                         break;
-                    case "REMOVE":
-                        response = handleRemoveCommand(parts);
+                    case REMOVE:
+                        response = handleRemoveCommand(msg);
                         break;
                     default:
                         System.out.println("Unknown command type");
@@ -44,6 +63,10 @@ public class UDPServer {
                 byte[] sendData = response.getBytes();
                 DatagramPacket reply = new DatagramPacket(sendData, sendData.length, clientAddress, clientPort);
                 socket.send(reply);
+                if(ServerUpdate) {
+                    updateAllClients(socket);
+                    ServerUpdate = false;
+                }
             }
 
         } catch (Exception e) {
@@ -55,25 +78,52 @@ public class UDPServer {
         }   
     }
 
-    private static String handleRemoveCommand(String[] parts) {
+    private static void updateAllClients(DatagramSocket socket) {
+        try {
+            //UPDATE List of (Name, IP address, UDP socket#, list of available files)
+            for(Client client : clients) {
+                String updateMsg = "UPDATE | List of (Name, IP address, UDP socket#, list of available files)";
+                // byte[] sendData = updateMsg.getBytes();
+                // DatagramPacket reply = new DatagramPacket(sendData, sendData.length, client.getClientAddress(), client.getClientPort());
+                // socket.send(reply);
+                System.out.println(updateMsg);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(); 
+        }
+    }
+
+    private static String handleRemoveCommand(Message msg) {
         String response = "";
-        Integer REQnumb = Integer.parseInt(parts[1].trim());
-        String clientName = parts[2].trim();
+        //Integer REQnumb = Integer.parseInt(parts[1].trim());
+        int REQnumb = msg.getRq();
+        //String clientName = parts[2].trim();
+        String clientName = msg.getName();
+        filenamesToRemove = msg.getFiles();
         boolean clientNameDNE = true;
         if(!clients.isEmpty()){
             for (Client client : clients) {
                 String name = client.getClientName();
                 if (name != null && name.equals(clientName)) { 
-                    for (int i = 3; i < parts.length; i++) {
-                        client.removeFileFromList(parts[i]);   
+                    for (String fileToRemove : filenamesToRemove) {
+                        client.removeFileFromList(fileToRemove);   
                     }
-                    response = String.format("REMOVED | %s", REQnumb);
+                    response = String.format("REMOVED | %d", REQnumb);
+                    ServerUpdate = true;
+                    timer.cancel();
+                    timer = new Timer();
+                    timer.schedule(new TimerTask() {
+                        @Override
+                        public void run() {
+                            UDPServer.updateAllClients(socket);
+                        }
+                    }, 0, timerPeriod);
                     clientNameDNE = false;
                     break;
                 }
             }
             if (clientNameDNE) {
-                response = String.format("REMOVE-DENIED | %s | Client Name does not exist",  REQnumb);
+                response = String.format("REMOVE-DENIED | %d | Client Name does not exist",  REQnumb);
             }
         } else {
             System.out.println("Client list is empty.");
@@ -86,25 +136,37 @@ public class UDPServer {
         return response;
     }
 
-    private static String handlePublishCommand(String[] parts) {
+    private static String handlePublishCommand(Message msg) {
         String response = "";
-        Integer REQnumb = Integer.parseInt(parts[1].trim());
-        String clientName = parts[2].trim();
+        // Integer REQnumb = Integer.parseInt(parts[1].trim());
+        // String clientName = parts[2].trim();
+        int REQnumb = msg.getRq();
+        String clientName = msg.getName();
+        filenamesToPublish = msg.getFiles();
         boolean clientNameDNE = true;
         if(!clients.isEmpty()){
             for (Client client : clients) {
                 String name = client.getClientName();
                 if (name != null && name.equals(clientName)) { 
-                    for (int i = 3; i < parts.length; i++) {
-                        client.addFileToList(parts[i]);   
+                    for (String fileToAdd : filenamesToPublish) {
+                        client.addFileToList(fileToAdd);   
                     }
-                    response = String.format("PUBLISHED | %s", REQnumb);
+                    response = String.format("PUBLISHED | %d", REQnumb);
+                    ServerUpdate = true;
+                    timer.cancel();
+                    timer = new Timer();
+                    timer.schedule(new TimerTask() {
+                        @Override
+                        public void run() {
+                            UDPServer.updateAllClients(socket);
+                        }
+                    }, 0, timerPeriod);
                     clientNameDNE = false;
                     break;
                 }
             }
             if (clientNameDNE) {
-                response = String.format("PUBLISH-DENIED | %s | Client Name does not exist",  REQnumb);
+                response = String.format("PUBLISH-DENIED | %d | Client Name does not exist",  REQnumb);
             }
         } else {
             System.out.println("Client list is empty.");
@@ -117,9 +179,9 @@ public class UDPServer {
         return response;
     }
 
-    private static String handleDeregisterCommand(String[] parts) {
-        Integer REQnumb = Integer.parseInt(parts[1].trim());
-        String clientName = parts[2].trim();
+    private static String handleDeregisterCommand(Message msg) {
+        int REQnumb = msg.getRq();
+        String clientName = msg.getName();
         String response = "";
         boolean clientNameDNE = true;
         Client clientToRemove = null;
@@ -135,6 +197,15 @@ public class UDPServer {
             if (!clientNameDNE) {
                 response = String.format("De-registering client: %s | %d", clientToRemove.getClientName(), REQnumb);
                 clients.remove(clientToRemove);
+                ServerUpdate = true;
+                timer.cancel();
+                timer = new Timer();
+                timer.schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        UDPServer.updateAllClients(socket);
+                    }
+                }, 0, timerPeriod);
             } else {
                 response = String.format("%s is not registered | %d", clientToRemove.getClientName(), REQnumb);
             }
@@ -149,15 +220,26 @@ public class UDPServer {
         return response;
     }
 
-    private static String handleRegisterCommand(String[] parts,InetAddress clientAddress, Integer clientPort) {
-        Integer REQnumb = Integer.parseInt(parts[1].trim());
-        String clientName = parts[2].trim();
+    private static String handleRegisterCommand(Message msg) {
+        int REQnumb = msg.getRq();
+        String clientName = msg.getName();
+        InetAddress clientAddress = msg.getIpAddress();
+        int clientPort = msg.getRq();
         String response = "";
         boolean clientNameExists = false;
         if(clients.isEmpty()) {
             Client newClient = new Client(clientName, clientAddress, clientPort);
             clients.add(newClient);
-            response = String.format("REGISTERED | %s", REQnumb);
+            response = String.format("REGISTERED | %d", REQnumb);
+            ServerUpdate = true;
+            timer.cancel();
+            timer = new Timer();
+            timer.schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    UDPServer.updateAllClients(socket);
+                }
+            }, 0, timerPeriod);
         } else {
             for (Client client : clients) {
                 String name = client.getClientName();
@@ -170,6 +252,7 @@ public class UDPServer {
                 Client newClient = new Client(clientName, clientAddress, clientPort);
                 clients.add(newClient);
                 response = String.format("REGISTERED | %s", REQnumb);
+                ServerUpdate = true;
             } else {
                 response = String.format("REGISTER-DENIED | %s | Name already taken by another Client",  REQnumb);
             }

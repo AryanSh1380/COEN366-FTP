@@ -1,33 +1,23 @@
 import java.io.File;
-import java.io.Serializable;
-import java.net.URI;
 
-public class TextFile extends File implements Serializable {
+public class TextFile {
+    
+    private File file;
+    private Client owner;
 
-    private String filename;
-    private String owner;
-
-    public TextFile(String pathname) {
-        super(pathname);
+    public TextFile(File file) {
+        this.file = file;
     }
 
-    public TextFile(URI uri) {
-        super(uri);
+    public File getFile() {
+        return file;
     }
-
-    public String getFilename() {
-        return filename;
-    }
-
-    public void setFilename(String filename) {
-        this.filename = filename;
-    }
-
-    public String getOwner() {
+    
+    public Client getOwner() {
         return owner;
     }
 
-    public void setOwner(String owner) {
+    public void setOwner(Client owner) {
         this.owner = owner;
     }
 }
