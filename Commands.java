@@ -1,0 +1,26 @@
+enum Type {
+    REGISTER,
+    REGISTERED,
+    REGISTER_DENIED,
+    DEREGISTER,
+    PUBLISH,
+    PUBLISHED,
+    PUBLISH_DENIED,
+    REMOVE,
+    REMOVED,
+    REMOVE_DENIED,
+    UPDATE,
+    UPDATE_CONTACT,
+    UPDATE_CONFIRMED,
+    UPDATE_DENIED,
+    FILE_REQ,
+    FILE_CONF,
+    FILE,
+    FILE_END,
+    FILE_ERROR
+}
+
+enum Reason {
+    NULL,
+    UNKNOWN
+}
