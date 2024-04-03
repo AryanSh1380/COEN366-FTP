@@ -61,27 +61,6 @@ public class TCPClient {
                 if(msg.getType().equals(Type.FILE_CONF)) {
                     Thread fileReceiver = new Thread(new FileReceiver(senderIp, msg.getSocket()));
                     fileReceiver.start();
-                    /*
-                    // Wait for file over provided TCP socket
-                    ServerSocket server = new ServerSocket(msg.getSocket(),1, senderIp);
-                    Socket client = server.accept();
-                    System.out.println("Client waiting for file");
-                    BufferedWriter bw = new BufferedWriter(new FileWriter("temp.txt"));
-                    Message file = null;
-                    while(file == null || !file.getType().equals(Type.FILE_END)){
-                        file = Message.receive(client);
-                        System.out.println("Client received " + file.toString());
-                        // Put file back together
-                        bw.write(file.getText());
-                        bw.flush();
-                    }
-                    */
-                    //String filename = file.getName();
-                    // RENAME AND ADD TO LIST OF OWNED FILE
-                    //bw.close();
-                    // Close the sockets created to receive the file
-                    //client.close();
-                   // server.close();
                 }
 
                 // Clear buffer
