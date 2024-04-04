@@ -37,7 +37,7 @@ public class Message implements Serializable {
         return ipAddress;
     }
 
-    public int getSocket() {
+    public int getSocketNumber() {
         return socketNum;
     }
 
