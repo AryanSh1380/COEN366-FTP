@@ -7,7 +7,7 @@ public class Client {
     private InetAddress clientAddress;
     private Integer clientPort;
     private List<String> listOfFiles;
-    
+
     public Client(String clientName, InetAddress clientAddress, Integer clientPort) {
         listOfFiles = new ArrayList<>();
         this.clientName = clientName;
@@ -24,7 +24,7 @@ public class Client {
     }
 
     public void printFileNameFromList() {
-        for(String filename : listOfFiles) {
+        for (String filename : listOfFiles) {
             System.out.println(filename);
         }
     }
@@ -39,5 +39,15 @@ public class Client {
 
     public Integer getClientPort() {
         return clientPort;
+    }
+
+    public void updateClientAddress(InetAddress address) {
+        clientAddress = address;
+
+    }
+
+    public void updateClientPort(Integer port) {
+        clientPort = port;
+
     }
 }

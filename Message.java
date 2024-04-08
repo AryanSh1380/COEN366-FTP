@@ -53,17 +53,18 @@ public class Message implements Serializable {
         return rq;
     }
 
-    public String getText(){
+    public String getText() {
         return text;
     }
 
-    public int getChunk(){
+    public int getChunk() {
         return chunk;
     }
 
     void setType(Type type) {
         this.type = type;
     }
+
     public void setText(String text) {
         this.text = text;
     }
@@ -74,7 +75,7 @@ public class Message implements Serializable {
 
     // [REGISTERED | RQ#] (server)
     // [PUBLISHED | RQ#] (server)
-    // [REMOVED | RQ#]  (server)
+    // [REMOVED | RQ#] (server)
     public Message(Type type, int rq) {
         this.type = type;
         this.rq = rq;
@@ -105,13 +106,24 @@ public class Message implements Serializable {
         this.socketNum = socketNum;
     }
 
-    // [PUBLISH | RQ# | Name | List of files] (client) 
-    // [REMOVE | RQ# | Name | List of files] (client) 
+    // [PUBLISH | RQ# | Name | List of files] (client)
+    // [REMOVE | RQ# | Name | List of files] (client)
     public Message(Type type, int rq, String name, List<String> filenames) {
         this.type = type;
         this.rq = rq;
         this.name = name;
         this.filenames = filenames;
+    }
+
+    // [UPDATE-CONTACT| RQ# | Name | IP Address | UDP Socket#] (Server)
+    // [UPDATE-CONFIRMED| RQ# | Name | IP Address | UDP Socket#] (Server)
+    public Message(Type type, int rq, Reason reason, String name, InetAddress ipAddress, Integer UDPport) {
+        this.type = type;
+        this.rq = rq;
+        this.reason = reason;
+        this.name = name;
+        this.ipAddress = ipAddress;
+        this.UDPport = UDPport;
     }
 
     // [UPDATE-DENIED | RQ# | Reason] (server)
@@ -176,11 +188,11 @@ public class Message implements Serializable {
     @Override
     public String toString() {
         String start = type + " | " + rq;
-        switch(type) {
+        switch (type) {
             case REGISTER: {
                 return start + " | " + name + " | " + ipAddress + " | " + socketNum;
             }
-                
+
             case REGISTERED:
                 return start;
             case REGISTER_DENIED:
@@ -222,5 +234,3 @@ public class Message implements Serializable {
         }
     }
 }
-
-
