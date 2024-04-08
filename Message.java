@@ -137,6 +137,12 @@ public class Message implements Serializable {
         this.text = text;
     }
 
+    public Message(Type type, String name, int rq) {
+        this.type = type;
+        this.name = name;
+        this.rq = rq;
+    }
+
     // Send message over TCP
     public void send(Socket socket) throws IOException {
         ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
@@ -148,12 +154,11 @@ public class Message implements Serializable {
     // Send message over UDP
     public void send(InetAddress ip, int port, DatagramSocket socket) throws IOException {
         // Setup
-        byte[] buffer = null;
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         ObjectOutputStream oos = new ObjectOutputStream(baos);
         oos.writeObject(this);
         oos.flush();
-        buffer = baos.toByteArray();
+        byte[] buffer = baos.toByteArray();
         // Send
         DatagramPacket sendingPacket = new DatagramPacket(buffer, buffer.length, ip, port);
         socket.send(sendingPacket);
