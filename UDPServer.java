@@ -3,6 +3,7 @@ import java.io.ObjectInputStream;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Scanner;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -54,6 +55,10 @@ public class UDPServer {
                         response = handleRemoveCommand(msg);
                         response.send(clientAddress,clientPort,socket);
                         break;
+                    case UPDATE:
+                        response = handleUpdateCommand(msg);
+                        response.send(clientAddress,clientPort,socket);
+                        break;
                     default:
                         System.out.println("Unknown command type");
                         // Handle unknown command type
@@ -87,6 +92,62 @@ public class UDPServer {
         } catch (Exception e) {
             e.printStackTrace(); 
         }
+    }
+
+    private static Message handleUpdateCommand(Message msg) throws UnknownHostException {
+        Message response = null;
+        Integer REQnumb = msg.getRq();
+        String clientName = msg.getName();
+        InetAddress updatedclientAddress = msg.getIpAddress();
+        Integer updatedclientPort = msg.getUDPport();
+        boolean clientNameDNE = true;
+        Client clientToUpdate = null;
+
+        if (!clients.isEmpty()) {
+            for (Client client : clients) {
+                String name = client.getClientName();
+                if (name != null && name.equals(clientName)) {
+                    clientToUpdate = client;
+                    clientNameDNE = false;
+                    break;
+                }
+            }
+            if (!clientNameDNE) {
+                if (updatedclientAddress.equals(clientToUpdate.getClientAddress())) {
+                    if(updatedclientPort.equals(clientToUpdate.getClientPort())) {
+                        System.out.println("address and udp port are the same. won't update");
+                        response = new Message(Type.UPDATE_DENIED, REQnumb, clientToUpdate.getClientName(), Reason.IP_ADDRESS_AND_PORT_NOT_CHANGED);
+                    } else {
+                        clientToUpdate.updateClientPort(updatedclientPort);
+                        response = new Message(Type.UPDATE_CONFIRMED, REQnumb, clientToUpdate.getClientName(), updatedclientAddress, updatedclientPort);
+                    }
+                } else {
+                    clientToUpdate.updateClientAddress(updatedclientAddress);
+                    clientToUpdate.updateClientPort(updatedclientPort);
+                    response = new Message(Type.UPDATE_CONFIRMED, REQnumb, clientToUpdate.getClientName(), updatedclientAddress, updatedclientPort);
+                }
+            
+                ServerUpdate = true;
+                timer.cancel();
+                timer = new Timer();
+                timer.schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        UDPServer.updateAllClients(socket);
+                    }
+                }, 0, timerPeriod);
+            } else {
+                //response = String.format("%s is not updated | %d", clientToUpdate.getClientName(), REQnumb);
+            }
+        } else {
+            System.out.println("Client list is empty.");
+        }
+        System.out.println("List of registered clients:");
+        for (Client client : clients) {
+            System.out.println(client.getClientName());
+        }
+        System.out.println("----------------------------------------------------------------------");
+        return response;
     }
 
     private static Message handleRemoveCommand(Message msg) {

@@ -109,7 +109,6 @@ public class UDPClient {
             System.out.println("Enter server UDP port: ");
             serverPort = sc.nextInt();
             sc.nextLine();
-
             // Start listening to port for incoming UDP packets
             datagramSocket = new DatagramSocket(cl.getClientPort());
             //datagramSocket.setSoTimeout(50000);
@@ -124,7 +123,8 @@ public class UDPClient {
             System.out.println("3. DEREGISTER");
             System.out.println("4. REMOVE");
             System.out.println("5. P2P");
-            System.out.println("6. EXIT");
+            System.out.println("6. UPDATE");
+            System.out.println("7. EXIT");
             System.out.print("Enter your choice: ");
             // Launch thread to perform actions
             Thread menu = new Thread(new InteractiveMenu(datagramSocket, cl));
@@ -162,7 +162,7 @@ public class UDPClient {
 
                 // Client received a file conf
                 if(messageReceived.getType().equals(Type.FILE_CONF)) {
-                    Thread fileReceiver = new Thread(new FileReceiver(messageReceived.getSocketNumber()));
+                    Thread fileReceiver = new Thread(new FileReceiver(messageReceived.getSocket()));
                     fileReceiver.start();
                 }
             }
@@ -179,6 +179,11 @@ public class UDPClient {
     static class InteractiveMenu implements Runnable {
         private DatagramSocket datagramSocket;
         private UDPClient client;
+        private List<String> filenamesToPublish;
+        private List<String> filenamesToRemove;
+        private File directory = new File(".");
+        private InetAddress updatedClientAddress;
+        private Integer updatedClientPort;
 
         InteractiveMenu(DatagramSocket datagramSocket, UDPClient client){
             this.datagramSocket = datagramSocket;
@@ -188,10 +193,10 @@ public class UDPClient {
         public void run() {
 
             try {
+                Scanner scanner = new Scanner(System.in);
                 loop:
                 while (!datagramSocket.isClosed()) {
-                    Scanner scanner = new Scanner(System.in);
-
+                    
                     // Reading user input
                     int choice = scanner.nextInt();
                     scanner.nextLine();
@@ -204,32 +209,29 @@ public class UDPClient {
                             break;
 
                         case 2:
-                        /*
-                        File[] files = directory.listFiles();
-                        for (int i = 0; i < files.length; i++) {
-                            filenamesToPublish.add(files[i].getName());
-                        }
-                        msg = new Message(Type.PUBLISH, reqNumb, clientName, filenamesToPublish);
-                        msg.send(serverAddress, serverPort, socket);
-                        break;
-                         */
+                            filenamesToPublish = new ArrayList<>();
+                            File[] files = directory.listFiles();
+                            for (int i = 0; i < files.length; i++) {
+                                filenamesToPublish.add(files[i].getName());
+                            }
+                            msg = new Message(Type.PUBLISH, client.getClientRequestNumber(), client.getClientName(), filenamesToPublish);
+                            msg.send(serverAddress, serverPort, datagramSocket);
+                            break;
+
                         case 3:
-                        /*
-                        msg = new Message(Type.DEREGISTER, reqNumb, clientName);
-                        msg.send(serverAddress, serverPort, socket);
-                        break;
+                            msg = new Message(Type.DEREGISTER, client.getClientRequestNumber(), client.getClientName());
+                            msg.send(serverAddress, serverPort, datagramSocket);
+                            break;
 
-                         */
                         case 4:
-                        /*
-                        filenamesToRemove.add("Main.java");
-                        filenamesToRemove.add("UDPClient.java");
-                        filenamesToRemove.add("UDPServer.java");
-                        msg = new Message(Type.REMOVE, reqNumb, clientName, filenamesToRemove);
-                        msg.send(serverAddress, serverPort, socket);
-                        break;
+                            filenamesToRemove = new ArrayList<>(); 
+                            filenamesToRemove.add("Main.java");
+                            filenamesToRemove.add("UDPClient.java");
+                            filenamesToRemove.add("UDPServer.java");
+                            msg = new Message(Type.REMOVE, client.getClientRequestNumber(), client.getClientName(), filenamesToRemove);
+                            msg.send(serverAddress, serverPort, datagramSocket);
+                            break;
 
-                         */
                         case 5:
                             System.out.println("Enter the IP address and the UDP socket of the client and the file name to send a file request");
                             String peerIp = scanner.nextLine();
@@ -243,11 +245,51 @@ public class UDPClient {
                             break;
 
                         case 6:
+                            System.out.println("Select an option:");
+                            System.out.println("1. Update IP Address");
+                            System.out.println("2. Update port number");
+                            System.out.println("3. Update both IP address and port number");
+                            System.out.print("Enter your choice: ");
+                            int request = scanner.nextInt();
+
+                            switch (request) {
+                                case 1:
+                                    System.out.println("Enter new IP address: ");
+                                    String newAddress = scanner.next();
+                                    updatedClientAddress = InetAddress.getByName(newAddress);
+                                    msg = new Message(Type.UPDATE, client.getClientRequestNumber(), client.getClientName(), updatedClientAddress, client.getClientPort());
+                                    msg.send(serverAddress, serverPort, datagramSocket);
+                                    break;
+                                    
+                                case 2:
+                                    System.out.println("Enter new port number: ");
+                                    updatedClientPort = scanner.nextInt();
+                                    msg = new Message(Type.UPDATE, client.getClientRequestNumber(), client.getClientName(), client.getClientAddress(), updatedClientPort);
+                                    msg.send(serverAddress, serverPort, datagramSocket);
+                                    break;
+
+                                case 3:
+                                    System.out.println("Enter new IP address: ");
+                                    newAddress = scanner.next();
+                                    updatedClientAddress = InetAddress.getByName(newAddress);
+                                    System.out.println("Enter new port number: ");
+                                    updatedClientPort = scanner.nextInt();
+                                    msg = new Message(Type.UPDATE, client.getClientRequestNumber(), client.getClientName(), client.getClientAddress(), updatedClientPort);
+                                    msg.send(serverAddress, serverPort, datagramSocket);
+                                    break;
+
+                                default:
+                                    break;
+                            }
+                            break;
+
+                        case 7:
                             break loop;
                         default:
                             System.out.println("Invalid choice!");
                     }
                 }
+                scanner.close();
             } catch(Exception e) {
                 e.printStackTrace();
             }
