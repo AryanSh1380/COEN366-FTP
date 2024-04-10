@@ -3,6 +3,7 @@ import java.io.ObjectInputStream;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Scanner;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -14,6 +15,7 @@ public class UDPServer {
     static private DatagramSocket socket;
     static private Timer timer;
     static private long timerPeriod = 10000;
+    static private Message response;
     public static void main(String[] args) {
         try {
             socket = new DatagramSocket(2308);
@@ -32,37 +34,36 @@ public class UDPServer {
                 byte[] receivedData = request.getData();
                 ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(receivedData));
                 Message msg = (Message) in.readObject();
-               
-                // String message = new String(request.getData(), 0, request.getLength());
+
                 InetAddress clientAddress = request.getAddress();
                 Integer clientPort = request.getPort();
 
-                // String[] parts = message.split("\\|");
-                // String commandType = parts[0].trim();
-                String response = "";
 
                 switch (msg.getType()) {
                     case REGISTER:
                         response = handleRegisterCommand(msg);
+                        response.send(clientAddress,clientPort,socket);
                         break;
                     case DEREGISTER:
-                        response = handleDeregisterCommand(msg);
+                        handleDeregisterCommand(msg);
                         break;
                     case PUBLISH:
                         response = handlePublishCommand(msg);
+                        response.send(clientAddress,clientPort,socket);
                         break;
                     case REMOVE:
                         response = handleRemoveCommand(msg);
+                        response.send(clientAddress,clientPort,socket);
+                        break;
+                    case UPDATE:
+                        response = handleUpdateCommand(msg);
+                        response.send(clientAddress,clientPort,socket);
                         break;
                     default:
                         System.out.println("Unknown command type");
                         // Handle unknown command type
                         break;
                 }
-
-                byte[] sendData = response.getBytes();
-                DatagramPacket reply = new DatagramPacket(sendData, sendData.length, clientAddress, clientPort);
-                socket.send(reply);
                 if(ServerUpdate) {
                     updateAllClients(socket);
                     ServerUpdate = false;
@@ -93,110 +94,39 @@ public class UDPServer {
         }
     }
 
-    private static String handleRemoveCommand(Message msg) {
-        String response = "";
-        //Integer REQnumb = Integer.parseInt(parts[1].trim());
-        int REQnumb = msg.getRq();
-        //String clientName = parts[2].trim();
+    private static Message handleUpdateCommand(Message msg) throws UnknownHostException {
+        Message response = null;
+        Integer REQnumb = msg.getRq();
         String clientName = msg.getName();
-        filenamesToRemove = msg.getFiles();
+        InetAddress updatedclientAddress = msg.getIpAddress();
+        Integer updatedclientPort = msg.getUDPport();
         boolean clientNameDNE = true;
-        if(!clients.isEmpty()){
-            for (Client client : clients) {
-                String name = client.getClientName();
-                if (name != null && name.equals(clientName)) { 
-                    for (String fileToRemove : filenamesToRemove) {
-                        client.removeFileFromList(fileToRemove);   
-                    }
-                    response = String.format("REMOVED | %d", REQnumb);
-                    ServerUpdate = true;
-                    timer.cancel();
-                    timer = new Timer();
-                    timer.schedule(new TimerTask() {
-                        @Override
-                        public void run() {
-                            UDPServer.updateAllClients(socket);
-                        }
-                    }, 0, timerPeriod);
-                    clientNameDNE = false;
-                    break;
-                }
-            }
-            if (clientNameDNE) {
-                response = String.format("REMOVE-DENIED | %d | Client Name does not exist",  REQnumb);
-            }
-        } else {
-            System.out.println("Client list is empty.");
-        }
-        System.out.println("Files available for share:");
-        for (Client client : clients) {
-            client.printFileNameFromList();
-        }
-        System.out.println("----------------------------------------------------------------------");
-        return response;
-    }
+        Client clientToUpdate = null;
 
-    private static String handlePublishCommand(Message msg) {
-        String response = "";
-        // Integer REQnumb = Integer.parseInt(parts[1].trim());
-        // String clientName = parts[2].trim();
-        int REQnumb = msg.getRq();
-        String clientName = msg.getName();
-        filenamesToPublish = msg.getFiles();
-        boolean clientNameDNE = true;
-        if(!clients.isEmpty()){
+        if (!clients.isEmpty()) {
             for (Client client : clients) {
                 String name = client.getClientName();
-                if (name != null && name.equals(clientName)) { 
-                    for (String fileToAdd : filenamesToPublish) {
-                        client.addFileToList(fileToAdd);   
-                    }
-                    response = String.format("PUBLISHED | %d", REQnumb);
-                    ServerUpdate = true;
-                    timer.cancel();
-                    timer = new Timer();
-                    timer.schedule(new TimerTask() {
-                        @Override
-                        public void run() {
-                            UDPServer.updateAllClients(socket);
-                        }
-                    }, 0, timerPeriod);
-                    clientNameDNE = false;
-                    break;
-                }
-            }
-            if (clientNameDNE) {
-                response = String.format("PUBLISH-DENIED | %d | Client Name does not exist",  REQnumb);
-            }
-        } else {
-            System.out.println("Client list is empty.");
-        }
-        System.out.println("Files available for share:");
-        for (Client client : clients) {
-            client.printFileNameFromList();
-        }
-        System.out.println("----------------------------------------------------------------------");
-        return response;
-    }
-
-    private static String handleDeregisterCommand(Message msg) {
-        int REQnumb = msg.getRq();
-        String clientName = msg.getName();
-        String response = "";
-        boolean clientNameDNE = true;
-        Client clientToRemove = null;
-        if(!clients.isEmpty()) {
-            for (Client client : clients) {
-                String name = client.getClientName();
-                if (name != null && name.equals(clientName)) { 
-                    clientToRemove = client;
+                if (name != null && name.equals(clientName)) {
+                    clientToUpdate = client;
                     clientNameDNE = false;
                     break;
                 }
             }
             if (!clientNameDNE) {
-                response = String.format("De-registering client: %s | %d", clientToRemove.getClientName(), REQnumb);
-                clients.remove(clientToRemove);
+                if (updatedclientAddress.equals(clientToUpdate.getClientAddress())) {
+                    if(updatedclientPort.equals(clientToUpdate.getClientPort())) {
+                        System.out.println("address and udp port are the same. won't update");
+                        response = new Message(Type.UPDATE_DENIED, REQnumb, clientToUpdate.getClientName(), Reason.IP_ADDRESS_AND_PORT_NOT_CHANGED);
+                    } else {
+                        clientToUpdate.updateClientPort(updatedclientPort);
+                        response = new Message(Type.UPDATE_CONFIRMED, REQnumb, clientToUpdate.getClientName(), updatedclientAddress, updatedclientPort);
+                    }
+                } else {
+                    clientToUpdate.updateClientAddress(updatedclientAddress);
+                    clientToUpdate.updateClientPort(updatedclientPort);
+                    response = new Message(Type.UPDATE_CONFIRMED, REQnumb, clientToUpdate.getClientName(), updatedclientAddress, updatedclientPort);
+                }
+            
                 ServerUpdate = true;
                 timer.cancel();
                 timer = new Timer();
@@ -207,7 +137,7 @@ public class UDPServer {
                     }
                 }, 0, timerPeriod);
             } else {
-                response = String.format("%s is not registered | %d", clientToRemove.getClientName(), REQnumb);
+                //response = String.format("%s is not updated | %d", clientToUpdate.getClientName(), REQnumb);
             }
         } else {
             System.out.println("Client list is empty.");
@@ -220,17 +150,137 @@ public class UDPServer {
         return response;
     }
 
-    private static String handleRegisterCommand(Message msg) {
+    private static Message handleRemoveCommand(Message msg) {
+        Message response = null;
+        int REQnumb = msg.getRq();
+        String clientName = msg.getName();
+        filenamesToRemove = msg.getFiles();
+        boolean clientNameDNE = true;
+        if(!clients.isEmpty()){
+            for (Client client : clients) {
+                String name = client.getClientName();
+                if (name != null && name.equals(clientName)) { 
+                    for (String fileToRemove : filenamesToRemove) {
+                        client.removeFileFromList(fileToRemove);   
+                    }
+                    response = new Message(Type.REMOVED, REQnumb);
+                    ServerUpdate = true;
+                    timer.cancel();
+                    timer = new Timer();
+                    timer.schedule(new TimerTask() {
+                        @Override
+                        public void run() {
+                            UDPServer.updateAllClients(socket);
+                        }
+                    }, 0, timerPeriod);
+                    clientNameDNE = false;
+                    break;
+                }
+            }
+            if (clientNameDNE) {
+                response = new Message(Type.REMOVE_DENIED, REQnumb, Reason.CLIENT_NAME_DNE);
+            }
+        } else {
+            System.out.println("Client list is empty.");
+        }
+        System.out.println("Files available for share:");
+        for (Client client : clients) {
+            client.printFileNameFromList();
+        }
+        System.out.println("----------------------------------------------------------------------");
+        return response;
+    }
+
+    private static Message handlePublishCommand(Message msg) {
+        int REQnumb = msg.getRq();
+        String clientName = msg.getName();
+        filenamesToPublish = msg.getFiles();
+        boolean clientNameDNE = true;
+        if(!clients.isEmpty()){
+            for (Client client : clients) {
+                String name = client.getClientName();
+                if (name != null && name.equals(clientName)) { 
+                    for (String fileToAdd : filenamesToPublish) {
+                        client.addFileToList(fileToAdd);   
+                    }
+                    response = new Message(Type.PUBLISHED, REQnumb);
+                    ServerUpdate = true;
+                    timer.cancel();
+                    timer = new Timer();
+                    timer.schedule(new TimerTask() {
+                        @Override
+                        public void run() {
+                            UDPServer.updateAllClients(socket);
+                        }
+                    }, 0, timerPeriod);
+                    clientNameDNE = false;
+                    break;
+                }
+            }
+            if (clientNameDNE) {
+                response = new Message(Type.PUBLISH_DENIED, REQnumb, Reason.CLIENT_NAME_DNE);
+            }
+        } else {
+            System.out.println("Client list is empty.");
+        }
+        System.out.println("Files available for share:");
+        for (Client client : clients) {
+            client.printFileNameFromList();
+        }
+        System.out.println("----------------------------------------------------------------------");
+        return response;
+    }
+
+    private static void handleDeregisterCommand(Message msg) {
+        int REQnumb = msg.getRq();
+        String clientName = msg.getName();
+        boolean clientNameDNE = true;
+        Client clientToRemove = null;
+        if(!clients.isEmpty()) {
+            for (Client client : clients) {
+                String name = client.getClientName();
+                if (name != null && name.equals(clientName)) { 
+                    clientToRemove = client;
+                    clientNameDNE = false;
+                    break;
+                }
+            }
+            if (!clientNameDNE) {
+                response = new Message(Type.DEREGISTERED, clientToRemove.getClientName(), REQnumb);
+                clients.remove(clientToRemove);
+                ServerUpdate = true;
+                timer.cancel();
+                timer = new Timer();
+                timer.schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        UDPServer.updateAllClients(socket);
+                    }
+                }, 0, timerPeriod);
+            } else {
+                response = new Message(Type.NOT_REGISTERED, clientToRemove.getClientName(), REQnumb);
+            }
+        } else {
+            System.out.println("Client list is empty.");
+        }
+        System.out.println("List of registered clients:");
+        for (Client client : clients) {
+            System.out.println(client.getClientName());
+        }
+        System.out.println("----------------------------------------------------------------------");
+        System.out.println(response);
+    }
+
+    private static Message handleRegisterCommand(Message msg) {
         int REQnumb = msg.getRq();
         String clientName = msg.getName();
         InetAddress clientAddress = msg.getIpAddress();
         int clientPort = msg.getRq();
-        String response = "";
         boolean clientNameExists = false;
         if(clients.isEmpty()) {
             Client newClient = new Client(clientName, clientAddress, clientPort);
             clients.add(newClient);
-            response = String.format("REGISTERED | %d", REQnumb);
+            response = new Message(Type.REGISTERED, REQnumb);
             ServerUpdate = true;
             timer.cancel();
             timer = new Timer();
@@ -251,10 +301,10 @@ public class UDPServer {
             if (!clientNameExists) {
                 Client newClient = new Client(clientName, clientAddress, clientPort);
                 clients.add(newClient);
-                response = String.format("REGISTERED | %s", REQnumb);
+                response = new Message(Type.REGISTERED, REQnumb);
                 ServerUpdate = true;
             } else {
-                response = String.format("REGISTER-DENIED | %s | Name already taken by another Client",  REQnumb);
+                response = new Message(Type.REGISTER_DENIED, REQnumb, Reason.CLIENT_NAME_ALREADY_IN_USE);
             }
         }
         System.out.println("List of registered clients:");

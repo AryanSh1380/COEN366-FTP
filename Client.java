@@ -40,4 +40,14 @@ public class Client {
     public Integer getClientPort() {
         return clientPort;
     }
+    
+    public void updateClientAddress(InetAddress address) {
+        clientAddress = address;
+
+    }
+
+    public void updateClientPort(Integer port) {
+        clientPort = port;
+
+    }
 }

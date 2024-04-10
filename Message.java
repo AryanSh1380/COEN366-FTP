@@ -9,19 +9,19 @@ public class Message implements Serializable {
 
     // Server to client and client to server
     private Type type;
-    private int rq;
+    private Integer rq;
     private Reason reason;
     private String name;
     private InetAddress ipAddress;
-    private int socketNum;
-    private int UDPport;
+    private Integer socketNum;
+    private Integer UDPport;
     private List<String> filenames;
 
     // Client to client
-    private int chunk;
+    private Integer chunk;
     private String text;
 
-    public int getUDPport() {
+    public Integer getUDPport() {
         return UDPport;
     }
 
@@ -37,7 +37,7 @@ public class Message implements Serializable {
         return ipAddress;
     }
 
-    public int getSocket() {
+    public Integer getSocket() {
         return socketNum;
     }
 
@@ -49,7 +49,7 @@ public class Message implements Serializable {
         return type;
     }
 
-    public int getRq() {
+    public Integer getRq() {
         return rq;
     }
 
@@ -57,7 +57,7 @@ public class Message implements Serializable {
         return text;
     }
 
-    public int getChunk(){
+    public Integer getChunk(){
         return chunk;
     }
 
@@ -68,21 +68,21 @@ public class Message implements Serializable {
         this.text = text;
     }
 
-    public void setChunk(int chunk) {
+    public void setChunk(Integer chunk) {
         this.chunk = chunk;
     }
 
     // [REGISTERED | RQ#] (server)
     // [PUBLISHED | RQ#] (server)
     // [REMOVED | RQ#]  (server)
-    public Message(Type type, int rq) {
+    public Message(Type type, Integer rq) {
         this.type = type;
         this.rq = rq;
     }
 
     // [DE-REGISTER | RQ# | Name] (client)
     // [FILE-REQ | RQ# | Filename] (client)
-    public Message(Type type, int rq, String name) {
+    public Message(Type type, Integer rq, String name) {
         this.type = type;
         this.rq = rq;
         this.name = name;
@@ -90,14 +90,16 @@ public class Message implements Serializable {
 
     // [PUBLISH-DENIED | RQ# | Reason] (server)
     // [FILE-ERROR | RQ# | Reason] (server)
-    public Message(Type type, int rq, Reason reason) {
+    public Message(Type type, Integer rq, Reason reason) {
         this.type = type;
         this.rq = rq;
         this.reason = reason;
     }
 
+    // [UPDATE-CONTACT| RQ# | Name | IP Address | UDP Socket#] (cleint)
+    // [UPDATE-CONFIRMED| RQ# | Name | IP Address | UDP Socket#] (Server)
     // [REGISTER | RQ# | Name | IP Address | UDP socket#] (client)
-    public Message(Type type, int rq, String name, InetAddress ipAddress, int socketNum) {
+    public Message(Type type, Integer rq, String name, InetAddress ipAddress, Integer socketNum) {
         this.type = type;
         this.rq = rq;
         this.name = name;
@@ -107,15 +109,15 @@ public class Message implements Serializable {
 
     // [PUBLISH | RQ# | Name | List of files] (client) 
     // [REMOVE | RQ# | Name | List of files] (client) 
-    public Message(Type type, int rq, String name, List<String> filenames) {
+    public Message(Type type, Integer rq, String name, List<String> filenames) {
         this.type = type;
         this.rq = rq;
         this.name = name;
         this.filenames = filenames;
     }
 
-    // [UPDATE-DENIED | RQ# | Reason] (server)
-    public Message(Type type, int rq, Reason reason, String name) {
+    // [UPDATE-DENIED | RQ# | Name | Reason] (server)
+    public Message(Type type, Integer rq, String name, Reason reason) {
         this.type = type;
         this.rq = rq;
         this.reason = reason;
@@ -123,18 +125,24 @@ public class Message implements Serializable {
     }
 
     // [FILE-CONF | RQ# | TCP socket#]
-    public Message(Type type, int rq, int socketNum) {
+    public Message(Type type, Integer rq, Integer socketNum) {
         this.type = type;
         this.rq = rq;
         this.socketNum = socketNum;
     }
 
-    public Message(Type type, int rq, String name, int chunk, String text) {
+    public Message(Type type, Integer rq, String name, Integer chunk, String text) {
         this.type = type;
         this.rq = rq;
         this.name = name;
         this.chunk = chunk;
         this.text = text;
+    }
+
+    public Message(Type type, String name, Integer rq) {
+        this.type = type;
+        this.name = name;
+        this.rq = rq;
     }
 
     // Send message over TCP
@@ -146,14 +154,13 @@ public class Message implements Serializable {
     }
 
     // Send message over UDP
-    public void send(InetAddress ip, int port, DatagramSocket socket) throws IOException {
+    public void send(InetAddress ip, Integer port, DatagramSocket socket) throws IOException {
         // Setup
-        byte[] buffer = null;
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         ObjectOutputStream oos = new ObjectOutputStream(baos);
         oos.writeObject(this);
         oos.flush();
-        buffer = baos.toByteArray();
+        byte[] buffer = baos.toByteArray();
         // Send
         DatagramPacket sendingPacket = new DatagramPacket(buffer, buffer.length, ip, port);
         socket.send(sendingPacket);
