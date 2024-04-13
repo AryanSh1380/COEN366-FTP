@@ -1,30 +1,31 @@
+import java.io.Serializable;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Client {
+public class Client implements Serializable {
     private String clientName;
     private InetAddress clientAddress;
     private Integer clientPort;
-    private List<String> listOfFiles;
+    private List<String> listOfPublishedFiles;
     
     public Client(String clientName, InetAddress clientAddress, Integer clientPort) {
-        listOfFiles = new ArrayList<>();
+        listOfPublishedFiles = new ArrayList<>();
         this.clientName = clientName;
         this.clientAddress = clientAddress;
         this.clientPort = clientPort;
     }
 
     public void addFileToList(String fileName) {
-        listOfFiles.add(fileName);
+        listOfPublishedFiles.add(fileName);
     }
 
     public void removeFileFromList(String fileName) {
-        listOfFiles.remove(fileName);
+        listOfPublishedFiles.remove(fileName);
     }
 
     public void printFileNameFromList() {
-        for(String filename : listOfFiles) {
+        for(String filename : listOfPublishedFiles) {
             System.out.println(filename);
         }
     }
@@ -49,5 +50,11 @@ public class Client {
     public void updateClientPort(Integer port) {
         clientPort = port;
 
+    }
+
+    @Override
+    public String toString() {
+        String files = listOfPublishedFiles.toString();
+        return clientName + "@" + clientAddress + "::" + clientPort + " " + files;
     }
 }
