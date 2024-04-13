@@ -219,7 +219,7 @@ public class Message implements Serializable {
             case FILE_CONF:
                 return start + " | " + socketNum;
             case FILE:
-                return start + " | " + name;
+                return start + " | " + name + " | " + chunk + " | " + text;
             case FILE_END:
                 return start + " | " + name + " | " + chunk + " | " + text;
             case FILE_ERROR:

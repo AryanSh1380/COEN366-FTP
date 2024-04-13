@@ -162,7 +162,7 @@ public class UDPClient {
 
                 // Client received a file conf
                 if(messageReceived.getType().equals(Type.FILE_CONF)) {
-                    Thread fileReceiver = new Thread(new FileReceiver(messageReceived.getSocket()));
+                    Thread fileReceiver = new Thread(new FileReceiver(messageReceived.getSocket(), senderIp));
                     fileReceiver.start();
                 }
             }
@@ -299,16 +299,18 @@ public class UDPClient {
 
     static class FileReceiver implements Runnable {
         private int socketNumber;
+        private InetAddress destinationIp;
 
-        FileReceiver(int socketNumber) {
+        FileReceiver(int socketNumber, InetAddress destinationIp) {
             this.socketNumber = socketNumber;
+            this.destinationIp = destinationIp;
         }
 
         // Wait for file over provided TCP socket number
         @Override
         public void run() {
             try {
-                Socket tcpSocket = new Socket(InetAddress.getByName("localhost"), socketNumber);
+                Socket tcpSocket = new Socket(destinationIp, socketNumber);
                 System.out.println("Client waiting for file");
                 BufferedWriter bw = new BufferedWriter(new FileWriter("temp.txt"));
                 Message file = null;
@@ -352,8 +354,7 @@ public class UDPClient {
         @Override
         public void run() {
             try  {
-                // Accept TCP connection
-                ServerSocket server = new ServerSocket(socketNumber, BACKLOG_SIZE, destinationIp);
+                ServerSocket server = new ServerSocket(socketNumber, BACKLOG_SIZE, InetAddress.getLocalHost());
                 server.setSoTimeout(CONNECTION_DELAY);
                 Socket destination = server.accept();
                 // Setup to read textFile character by character
