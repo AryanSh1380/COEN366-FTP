@@ -30,7 +30,7 @@ public class UDPClient {
     public UDPClient() throws UnknownHostException {
         listOfFiles = new ArrayList<>();
         this.clientName = "";
-        this.clientAddress = InetAddress.getByName("localhost");
+        this.clientAddress = InetAddress.getLocalHost();
         this.clientPort = 5555;
         this.requestNumber = 0;
     }
@@ -162,7 +162,7 @@ public class UDPClient {
 
                 // Client received a file conf
                 if(messageReceived.getType().equals(Type.FILE_CONF)) {
-                    Thread fileReceiver = new Thread(new FileReceiver(messageReceived.getSocket()));
+                    Thread fileReceiver = new Thread(new FileReceiver(messageReceived.getSocket(), senderIp));
                     fileReceiver.start();
                 }
             }
@@ -184,6 +184,7 @@ public class UDPClient {
         private File directory = new File(".");
         private InetAddress updatedClientAddress;
         private Integer updatedClientPort;
+        private Integer fileCount = 0;
 
         InteractiveMenu(DatagramSocket datagramSocket, UDPClient client){
             this.datagramSocket = datagramSocket;
@@ -194,6 +195,7 @@ public class UDPClient {
 
             try {
                 Scanner scanner = new Scanner(System.in);
+                File[] files = directory.listFiles();
                 loop:
                 while (!datagramSocket.isClosed()) {
                     
@@ -210,9 +212,25 @@ public class UDPClient {
 
                         case 2:
                             filenamesToPublish = new ArrayList<>();
-                            File[] files = directory.listFiles();
-                            for (int i = 0; i < files.length; i++) {
-                                filenamesToPublish.add(files[i].getName());
+                            System.out.println("How many files would you like to add: ");
+                            fileCount = scanner.nextInt();
+                            scanner.nextLine(); // Consume newline character
+                            while (fileCount > 0) {
+                                System.out.println("Enter filename: ");
+                                String filename = scanner.nextLine();
+                                boolean fileExists = false;
+                                for (File file : files) {
+                                    if (filename.equals(file.getName())) {
+                                        filenamesToPublish.add(filename);
+                                        fileExists = true;
+                                        break;
+                                    }
+                                }
+                                if (!fileExists) {
+                                    System.out.println("Invalid input: File must exist in the same directory as the client");
+                                } else {
+                                    fileCount--;
+                                }
                             }
                             msg = new Message(Type.PUBLISH, client.getClientRequestNumber(), client.getClientName(), filenamesToPublish);
                             msg.send(serverAddress, serverPort, datagramSocket);
@@ -224,10 +242,27 @@ public class UDPClient {
                             break;
 
                         case 4:
-                            filenamesToRemove = new ArrayList<>(); 
-                            filenamesToRemove.add("Main.java");
-                            filenamesToRemove.add("UDPClient.java");
-                            filenamesToRemove.add("UDPServer.java");
+                            filenamesToRemove = new ArrayList<>();
+                            System.out.println("How many files would you like to remove: ");
+                            fileCount = scanner.nextInt();
+                            scanner.nextLine(); // Consume newline character
+                            while (fileCount > 0) {
+                                System.out.println("Enter filename: ");
+                                String filename = scanner.nextLine();
+                                boolean fileExists = false;
+                                for (File file : files) {
+                                    if (filename.equals(file.getName())) {
+                                        filenamesToRemove.add(filename);
+                                        fileExists = true;
+                                        break;
+                                    }
+                                }
+                                if (!fileExists) {
+                                    System.out.println("Invalid input: File must exist in the same directory as the client");
+                                } else {
+                                    fileCount--;
+                                }
+                            }
                             msg = new Message(Type.REMOVE, client.getClientRequestNumber(), client.getClientName(), filenamesToRemove);
                             msg.send(serverAddress, serverPort, datagramSocket);
                             break;
@@ -274,6 +309,7 @@ public class UDPClient {
                                     updatedClientAddress = InetAddress.getByName(newAddress);
                                     System.out.println("Enter new port number: ");
                                     updatedClientPort = scanner.nextInt();
+                                    scanner.nextLine();
                                     msg = new Message(Type.UPDATE, client.getClientRequestNumber(), client.getClientName(), client.getClientAddress(), updatedClientPort);
                                     msg.send(serverAddress, serverPort, datagramSocket);
                                     break;
@@ -299,16 +335,18 @@ public class UDPClient {
 
     static class FileReceiver implements Runnable {
         private int socketNumber;
+        private InetAddress destinationIp;
 
-        FileReceiver(int socketNumber) {
+        FileReceiver(int socketNumber, InetAddress destinationIp) {
             this.socketNumber = socketNumber;
+            this.destinationIp = destinationIp;
         }
 
         // Wait for file over provided TCP socket number
         @Override
         public void run() {
             try {
-                Socket tcpSocket = new Socket(InetAddress.getByName("localhost"), socketNumber);
+                Socket tcpSocket = new Socket(destinationIp, socketNumber);
                 System.out.println("Client waiting for file");
                 BufferedWriter bw = new BufferedWriter(new FileWriter("temp.txt"));
                 Message file = null;
@@ -352,8 +390,7 @@ public class UDPClient {
         @Override
         public void run() {
             try  {
-                // Accept TCP connection
-                ServerSocket server = new ServerSocket(socketNumber, BACKLOG_SIZE, destinationIp);
+                ServerSocket server = new ServerSocket(socketNumber, BACKLOG_SIZE, InetAddress.getLocalHost());
                 server.setSoTimeout(CONNECTION_DELAY);
                 Socket destination = server.accept();
                 // Setup to read textFile character by character

@@ -16,6 +16,7 @@ public class Message implements Serializable {
     private Integer socketNum;
     private Integer UDPport;
     private List<String> filenames;
+    private List<Client> clients;
 
     // Client to client
     private Integer chunk;
@@ -96,7 +97,7 @@ public class Message implements Serializable {
         this.reason = reason;
     }
 
-    // [UPDATE-CONTACT| RQ# | Name | IP Address | UDP Socket#] (cleint)
+    // [UPDATE-CONTACT| RQ# | Name | IP Address | UDP Socket#] (client)
     // [UPDATE-CONFIRMED| RQ# | Name | IP Address | UDP Socket#] (Server)
     // [REGISTER | RQ# | Name | IP Address | UDP socket#] (client)
     public Message(Type type, Integer rq, String name, InetAddress ipAddress, Integer socketNum) {
@@ -129,6 +130,12 @@ public class Message implements Serializable {
         this.type = type;
         this.rq = rq;
         this.socketNum = socketNum;
+    }
+
+    // UPDATE (all clients)
+    public Message(Type type, List<Client> clients) {
+        this.type = type;
+        this.clients = clients;
     }
 
     public Message(Type type, Integer rq, String name, Integer chunk, String text) {
@@ -187,7 +194,6 @@ public class Message implements Serializable {
             case REGISTER: {
                 return start + " | " + name + " | " + ipAddress + " | " + socketNum;
             }
-                
             case REGISTERED:
                 return start;
             case REGISTER_DENIED:
@@ -207,7 +213,12 @@ public class Message implements Serializable {
             case REMOVE_DENIED:
                 return start + " | " + reason;
             case UPDATE:
-                return start + " | " + name + " | " + ipAddress + " | " + socketNum + " | " + filenames;
+                StringBuilder clientList = new StringBuilder();
+                for(Client client : clients) {
+                    clientList.append(client.toString());
+                    clientList.append('\n');
+                }
+                return type + " | " + clientList;
             case UPDATE_CONTACT:
                 return start + " | " + name + " | " + ipAddress + " | " + socketNum;
             case UPDATE_CONFIRMED:
@@ -219,7 +230,7 @@ public class Message implements Serializable {
             case FILE_CONF:
                 return start + " | " + socketNum;
             case FILE:
-                return start + " | " + name;
+                return start + " | " + name + " | " + chunk + " | " + text;
             case FILE_END:
                 return start + " | " + name + " | " + chunk + " | " + text;
             case FILE_ERROR:
@@ -229,5 +240,3 @@ public class Message implements Serializable {
         }
     }
 }
-
-
