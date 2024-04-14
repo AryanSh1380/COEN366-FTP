@@ -46,8 +46,8 @@ public class Client implements Serializable {
 
     public Boolean isPublished(String f) {
         Boolean isPublished = false;
-        for(String file : listOfPublishedFiles) {
-            if(file.equals(f)) isPublished = true;
+        for(String filename : listOfPublishedFiles) {
+            if(filename.equals(f)) isPublished = true;
         }
         return isPublished;
     }

@@ -92,19 +92,15 @@ public class UDPClient {
                 System.out.println("\nClient received " + messageReceived.toString());
 
                 // Extract sender information
-                //InetAddress senderIp = receivePacket.getAddress();
                 InetAddress senderIp = receivePacket.getAddress();
                 Integer senderUdpPort = receivePacket.getPort();
 
-                // Client received an update message
-                if(messageReceived.getType().equals(Type.UPDATE)){
-                    peers = messageReceived.getClients();
-                }
 
                 // Client received a file request
                 if(messageReceived.getType().equals(Type.FILE_REQ)) {
 
                     // Check if client requesting the file is registered
+                    /*
                     if(!isPeer(senderIp, senderUdpPort)) {
                         Message fileErrorMessage = new Message(Type.FILE_ERROR, messageReceived.getRq(), Reason.UNKNOWN_CLIENT);
                         fileErrorMessage.send(senderIp, senderUdpPort, datagramSocket);
@@ -122,13 +118,26 @@ public class UDPClient {
                         Thread fileSender = new Thread(new FileSender(senderIp, tcpSocketNumber, messageReceived.getRq(), messageReceived.getName()));
                         fileSender.start();
                     }
+                     */
+                    // Accept the request and send a file configuration message
+                    Integer tcpSocketNumber = acquireTCPSocketNumber();
+                    Message fileConfMessage = new Message(Type.FILE_CONF, messageReceived.getRq(), tcpSocketNumber);
+                    fileConfMessage.send(senderIp, senderUdpPort, datagramSocket);
 
+                    // Send the file over provided TCP socket
+                    Thread fileSender = new Thread(new FileSender(senderIp, tcpSocketNumber, messageReceived.getRq(), messageReceived.getName()));
+                    fileSender.start();
                 }
 
                 // Client received a file configuration message
                 if(messageReceived.getType().equals(Type.FILE_CONF)) {
                     Thread fileReceiver = new Thread(new FileReceiver(messageReceived.getSocketNum(), senderIp));
                     fileReceiver.start();
+                }
+
+                // Client received an update message
+                if(messageReceived.getType().equals(Type.UPDATE)){
+                    peers = messageReceived.getClients();
                 }
 
             }
@@ -304,7 +313,7 @@ public class UDPClient {
     }
 
     static class FileReceiver implements Runnable {
-        private int socketNumber;
+        private Integer socketNumber;
         private InetAddress destinationIp;
 
         FileReceiver(int socketNumber, InetAddress destinationIp) {
@@ -312,25 +321,68 @@ public class UDPClient {
             this.destinationIp = destinationIp;
         }
 
+        public String getUniqueFilename(String filename) {
+
+            int fileVersion = 1;
+            String uniqueFilename = filename;
+
+            File file = new File(filename);
+
+            if(file.exists()){
+                // Extract the filename components
+                String[] filenameSplit = filename.split("\\.");
+                String name = filenameSplit[0];
+                String dot = ".";
+                String extension = filenameSplit[1];
+                // Update the file version
+                do {
+                    uniqueFilename = name + "_" + fileVersion + dot + extension;
+                    file = new File(uniqueFilename);
+                    fileVersion++;
+                } while(file.exists());
+            }
+
+            return uniqueFilename;
+        }
+
         // Wait for file over provided TCP socket number
         @Override
         public void run() {
             try {
+                // Connect to the TCP socket
                 Socket tcpSocket = new Socket(destinationIp, socketNumber);
                 System.out.println("Client waiting for file");
-                // CORRECT FILENAME
+
+                // Receive the first message and get the filename
+                Message fileMessage = Message.receive(tcpSocket);
+                String filename = fileMessage.getName();
+                System.out.println("Client received " + fileMessage);
+
+                // Get a unique filename
+                String uniqueFilename = getUniqueFilename(filename);
+
+                // Create the file and write to it
+                BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(uniqueFilename));
+                bufferedWriter.write(fileMessage.getText());
+                while(fileMessage.getType() != Type.FILE_END) {
+                    fileMessage = Message.receive(tcpSocket);
+                    System.out.println("Client received " + fileMessage.toString());
+                    bufferedWriter.write(fileMessage.getText());
+                    bufferedWriter.flush();
+                }
+                /*
                 BufferedWriter bw = new BufferedWriter(new FileWriter("temp.txt"));
                 Message fileMessage = null;
                 while (fileMessage == null || !fileMessage.getType().equals(Type.FILE_END)) {
                     // ADD TIMEOUT IF CLIENT DOES NOT RECEIVE ANYTHING
                     fileMessage = Message.receive(tcpSocket);
-                    System.out.println("Client received " + fileMessage.toString());
+
                     // Put file back together
                     bw.write(fileMessage.getText());
                     bw.flush();
                 }
-                String filename = fileMessage.getName();
-                bw.close();
+                */
+                bufferedWriter.close();
                 tcpSocket.close();
             } catch (Exception e) {
                 e.printStackTrace();
