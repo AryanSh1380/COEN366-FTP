@@ -30,7 +30,6 @@ public class Client implements Serializable {
             System.out.println(filename);
         }
     }
-
     public String getClientName() {
         return clientName;
     }
@@ -45,18 +44,14 @@ public class Client implements Serializable {
 
 
     public Boolean isPublished(String f) {
-        Boolean isPublished = false;
-        for(String filename : listOfPublishedFiles) {
-            if(filename.equals(f)) isPublished = true;
-        }
-        return isPublished;
+        if(listOfPublishedFiles.contains(f)) return true;
+        else return false;
     }
 
     public void updateClientPort(Integer port) {
         clientPort = port;
 
     }
-
     public void updateClientAddress(InetAddress address) {
         clientAddress = address;
 

@@ -29,18 +29,25 @@ public class UDPClient {
         return r.nextInt(MAX_PORT_NUMBER - MIN_PORT_NUMBER) + MIN_PORT_NUMBER;
     }
 
+
     public static Boolean isPeer(InetAddress ip, Integer port) {
-        Boolean isPeer = false;
+        String testIp = ip.toString().trim();
+        if(testIp.startsWith("/")){
+            testIp = testIp.substring(1);
+        }
         if(!peers.isEmpty()){
             for(Client peer : peers) {
-                System.out.println("Provided: " + ip.getHostName() + " " + port);
-                System.out.println("Peerlist " + peer.getClientAddress() + " " + peer.getClientPort());
-                if((peer.getClientAddress() == ip) && (peer.getClientPort() == port)){
-                    isPeer = true;
+                String peerIp = peer.getClientAddress().getHostAddress();
+                if(peerIp.equals(testIp)) {
+                    if(peer.getClientPort().equals(port)) {
+                        System.out.println("Provided port = " + port);
+                        System.out.println("Peer list port = " + peer.getClientPort());
+                        return true;
+                    }
                 }
             }
         }
-        return isPeer;
+        return false;
     }
 
     public static void main(String[] args) {
@@ -94,13 +101,12 @@ public class UDPClient {
                 // Extract sender information
                 InetAddress senderIp = receivePacket.getAddress();
                 Integer senderUdpPort = receivePacket.getPort();
-
-
+                
                 // Client received a file request
                 if(messageReceived.getType().equals(Type.FILE_REQ)) {
 
                     // Check if client requesting the file is registered
-                    /*
+                    // BROKEN
                     if(!isPeer(senderIp, senderUdpPort)) {
                         Message fileErrorMessage = new Message(Type.FILE_ERROR, messageReceived.getRq(), Reason.UNKNOWN_CLIENT);
                         fileErrorMessage.send(senderIp, senderUdpPort, datagramSocket);
@@ -118,15 +124,6 @@ public class UDPClient {
                         Thread fileSender = new Thread(new FileSender(senderIp, tcpSocketNumber, messageReceived.getRq(), messageReceived.getName()));
                         fileSender.start();
                     }
-                     */
-                    // Accept the request and send a file configuration message
-                    Integer tcpSocketNumber = acquireTCPSocketNumber();
-                    Message fileConfMessage = new Message(Type.FILE_CONF, messageReceived.getRq(), tcpSocketNumber);
-                    fileConfMessage.send(senderIp, senderUdpPort, datagramSocket);
-
-                    // Send the file over provided TCP socket
-                    Thread fileSender = new Thread(new FileSender(senderIp, tcpSocketNumber, messageReceived.getRq(), messageReceived.getName()));
-                    fileSender.start();
                 }
 
                 // Client received a file configuration message
@@ -180,7 +177,7 @@ public class UDPClient {
                 loop:
                 while (!datagramSocket.isClosed()) {
                     
-                    // Reading user input
+                    // Read user input
                     int choice = scanner.nextInt();
                     scanner.nextLine();
                     incrementRequestNumber();
@@ -203,6 +200,7 @@ public class UDPClient {
                                 for (File file : files) {
                                     if (filename.equals(file.getName())) {
                                         filenamesToPublish.add(filename);
+                                        client.addFileToList(filename);
                                         fileExists = true;
                                         break;
                                     }
@@ -234,6 +232,7 @@ public class UDPClient {
                                 for (File file : files) {
                                     if (filename.equals(file.getName())) {
                                         filenamesToRemove.add(filename);
+                                        client.removeFileFromList(filename);
                                         fileExists = true;
                                         break;
                                     }
@@ -249,12 +248,11 @@ public class UDPClient {
                             break;
 
                         case 5:
-                            System.out.println("Enter the IP address and the UDP socket of the client and the file name to send a file request");
+                            System.out.println("Enter the IP address of the client, the port number of the client and the file name to send a file request");
                             String peerIp = scanner.nextLine();
                             int peerPort = scanner.nextInt();
                             scanner.nextLine();
                             String filename = scanner.nextLine();
-
                             // Send FILE_REQ message
                             Message fileReq = new Message(Type.FILE_REQ, requestNumber, filename);
                             fileReq.send(InetAddress.getByName(peerIp), peerPort, datagramSocket);
