@@ -2,6 +2,7 @@ import java.io.Serializable;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class Client implements Serializable {
     private String clientName;
@@ -41,10 +42,14 @@ public class Client implements Serializable {
     public Integer getClientPort() {
         return clientPort;
     }
-    
-    public void updateClientAddress(InetAddress address) {
-        clientAddress = address;
 
+
+    public Boolean isPublished(String f) {
+        Boolean isPublished = false;
+        for(String file : listOfPublishedFiles) {
+            if(file.equals(f)) isPublished = true;
+        }
+        return isPublished;
     }
 
     public void updateClientPort(Integer port) {
@@ -52,9 +57,14 @@ public class Client implements Serializable {
 
     }
 
+    public void updateClientAddress(InetAddress address) {
+        clientAddress = address;
+
+    }
+
     @Override
     public String toString() {
         String files = listOfPublishedFiles.toString();
-        return clientName + "@" + clientAddress + "::" + clientPort + " " + files;
+        return clientName + "@" + clientAddress + ":" + clientPort + " " + files;
     }
 }

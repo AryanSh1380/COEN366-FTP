@@ -1,5 +1,4 @@
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.net.*;
 import java.util.ArrayList;
@@ -119,7 +118,7 @@ public class UDPServer {
             REQnumb = msg.getRq();
             clientName = msg.getName();
             updatedclientAddress = msg.getIpAddress();
-            updatedclientPort = msg.getUDPport();
+            updatedclientPort = msg.getSocketNum();
             this.destinationAddress = destinationAddress;
             this.destinationPort = destinationPort;
         }
@@ -358,7 +357,7 @@ public class UDPServer {
             REQnumb = msg.getRq();
             clientName = msg.getName();
             clientAddress = msg.getIpAddress();
-            clientPort = msg.getSocket();
+            clientPort = msg.getSocketNum();
             clientNameExists = false;
             this.destinationAddress = destinationAddress;
             this.destinationPort = destinationPort;

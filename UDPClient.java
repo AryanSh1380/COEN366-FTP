@@ -9,114 +9,65 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.io.ObjectInputStream;
 
 public class UDPClient {
-    // Client attributes
-    private String clientName;
-    private InetAddress clientAddress;
-    private Integer clientPort;
-    private List<String> listOfFiles;
-    private Integer requestNumber;
 
-    // For communication with server and other clients
+    // Attribute for communication with server and other clients
+    private static Client client;
     private static InetAddress serverAddress;
-    private static Integer serverPort;
     private static byte[] buffer;
-    private static final int BUFFER_SIZE = 65535;
     private static DatagramSocket datagramSocket;
+    private static List<Client> peers = new ArrayList<>();
+    private static final Integer BUFFER_SIZE = 65535;
+    private static final Integer SERVER_PORT = 2308;
+    private final static Integer MIN_PORT_NUMBER = 1025;
+    private final static Integer MAX_PORT_NUMBER = 65535;
 
-    public UDPClient() throws UnknownHostException {
-        listOfFiles = new ArrayList<>();
-        this.clientName = "";
-        this.clientAddress = InetAddress.getLocalHost();
-        this.clientPort = 5555;
-        this.requestNumber = 0;
-    }
-
-    public void addFileToList(String fileName) {
-        listOfFiles.add(fileName);
-    }
-
-    public void removeFileFromList(String fileName) {
-        listOfFiles.remove(fileName);
-    }
-
-    public void printFileNameFromList() {
-        for (String filename : listOfFiles) {
-            System.out.println(filename);
-        }
-    }
-
-    public String getClientName() {
-        return clientName;
-    }
-
-    public InetAddress getClientAddress() {
-        return clientAddress;
-    }
-
-    public Integer getClientPort() {
-        return clientPort;
-    }
-
-    public Integer getClientRequestNumber() {
-        return requestNumber;
-    }
-
-    public Integer incrementRequestNumber(){
-        return requestNumber++;
-    }
-    public void setClientName(String clientName) {
-        this.clientName = clientName;
-    }
-
-    public void setClientAddress(InetAddress clientAddress) {
-        this.clientAddress = clientAddress;
-    }
-
-    public void setClientPort(Integer clientPort) {
-        this.clientPort = clientPort;
-    }
-
-    public void setListOfFiles(List<String> listOfFiles) {
-        this.listOfFiles = listOfFiles;
-    }
-
-    public static int acquireTCPSocketNumber() {
-        final int MIN_PORT_NUMBER = 1025;
-        final int MAX_PORT_NUMBER = 65535;
+    public static Integer acquireTCPSocketNumber() {
         Random r = new Random();
         return r.nextInt(MAX_PORT_NUMBER - MIN_PORT_NUMBER) + MIN_PORT_NUMBER;
     }
 
+    public static Boolean isPeer(InetAddress ip, Integer port) {
+        Boolean isPeer = false;
+        if(!peers.isEmpty()){
+            for(Client peer : peers) {
+                System.out.println("Provided: " + ip.getHostName() + " " + port);
+                System.out.println("Peerlist " + peer.getClientAddress() + " " + peer.getClientPort());
+                if((peer.getClientAddress() == ip) && (peer.getClientPort() == port)){
+                    isPeer = true;
+                }
+            }
+        }
+        return isPeer;
+    }
 
     public static void main(String[] args) {
 
         try {
+
             // Initialize client information
-            UDPClient cl = new UDPClient();
-            System.out.println("Client address is " + cl.getClientAddress().getCanonicalHostName());
             Scanner sc = new Scanner(System.in);
             System.out.println("Enter client name: ");
-            cl.setClientName(sc.nextLine());
+            String clientName = sc.nextLine();
             System.out.println("Enter UDP port for the client: ");
-            cl.setClientPort(sc.nextInt());
+            Integer clientPort = sc.nextInt();
             sc.nextLine();
+            client = new Client(clientName, InetAddress.getLocalHost(), clientPort);
+
+            // Get server address
             System.out.println("Enter server address: ");
             serverAddress = InetAddress.getByName(sc.nextLine());
-            System.out.println("Enter server UDP port: ");
-            serverPort = sc.nextInt();
-            sc.nextLine();
+
             // Start listening to port for incoming UDP packets
-            datagramSocket = new DatagramSocket(cl.getClientPort());
+            datagramSocket = new DatagramSocket(client.getClientPort());
             //datagramSocket.setSoTimeout(50000);
             buffer = new byte[BUFFER_SIZE];
             DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
-            System.out.println("Client listening to port " + cl.getClientPort());
+            System.out.println("Client listening to port " + client.getClientPort());
 
-            // Displaying menu options
+            // Display menu options
             System.out.println("Select an option:");
             System.out.println("1. REGISTER");
             System.out.println("2. PUBLISH");
@@ -126,45 +77,60 @@ public class UDPClient {
             System.out.println("6. UPDATE");
             System.out.println("7. EXIT");
             System.out.print("Enter your choice: ");
+
             // Launch thread to perform actions
-            Thread menu = new Thread(new InteractiveMenu(datagramSocket, cl));
+            Thread menu = new Thread(new InteractiveMenu(datagramSocket, client));
             menu.start();
 
-            // Receive incoming packets
+            // Continuously listen to the client port
             while (!datagramSocket.isClosed()) {
+
+                // Receive incoming packets
                 datagramSocket.receive(receivePacket);
                 ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(receivePacket.getData()));
                 Message messageReceived = (Message) ois.readObject();
                 System.out.println("\nClient received " + messageReceived.toString());
 
-                // Process the received messages
-
                 // Extract sender information
+                //InetAddress senderIp = receivePacket.getAddress();
                 InetAddress senderIp = receivePacket.getAddress();
-                int senderUdpPort = receivePacket.getPort();
+                Integer senderUdpPort = receivePacket.getPort();
 
-                // Test with server
-                if(messageReceived.getType().equals(Type.REGISTERED)) {
-                    System.out.println("Client registered");
+                // Client received an update message
+                if(messageReceived.getType().equals(Type.UPDATE)){
+                    peers = messageReceived.getClients();
                 }
 
                 // Client received a file request
-                if(messageReceived.getType().equals(Type.FILE_REQ)) { // ADD CHECK TO SEE IF CLIENT OWNS THE FILE BEFORE SENDING FILE_CONF
+                if(messageReceived.getType().equals(Type.FILE_REQ)) {
 
-                    int tcpSocketNumber = acquireTCPSocketNumber(); // Get a random TCP socket number
-                    Message fileConfMessage = new Message(Type.FILE_CONF, messageReceived.getRq(), tcpSocketNumber); // Send a file conf message to the client who requested the file
-                    fileConfMessage.send(senderIp, senderUdpPort, datagramSocket);
+                    // Check if client requesting the file is registered
+                    if(!isPeer(senderIp, senderUdpPort)) {
+                        Message fileErrorMessage = new Message(Type.FILE_ERROR, messageReceived.getRq(), Reason.UNKNOWN_CLIENT);
+                        fileErrorMessage.send(senderIp, senderUdpPort, datagramSocket);
+                    // Check if file has been published by the client
+                    } else if(!client.isPublished(messageReceived.getName())) {
+                        Message fileErrorMessage = new Message(Type.FILE_ERROR, messageReceived.getRq(), Reason.FILE_NOT_FOUND);
+                        fileErrorMessage.send(senderIp, senderUdpPort, datagramSocket);
+                    } else {
+                        // Accept the request and send a file configuration message
+                        Integer tcpSocketNumber = acquireTCPSocketNumber();
+                        Message fileConfMessage = new Message(Type.FILE_CONF, messageReceived.getRq(), tcpSocketNumber);
+                        fileConfMessage.send(senderIp, senderUdpPort, datagramSocket);
 
-                    // Send file over provided TCP socket
-                    Thread fileSender = new Thread(new FileSender(senderIp, tcpSocketNumber, messageReceived.getRq(), messageReceived.getName()));
-                    fileSender.start();
+                        // Send the file over provided TCP socket
+                        Thread fileSender = new Thread(new FileSender(senderIp, tcpSocketNumber, messageReceived.getRq(), messageReceived.getName()));
+                        fileSender.start();
+                    }
+
                 }
 
-                // Client received a file conf
+                // Client received a file configuration message
                 if(messageReceived.getType().equals(Type.FILE_CONF)) {
-                    Thread fileReceiver = new Thread(new FileReceiver(messageReceived.getSocket(), senderIp));
+                    Thread fileReceiver = new Thread(new FileReceiver(messageReceived.getSocketNum(), senderIp));
                     fileReceiver.start();
                 }
+
             }
 
         } catch (Exception e) {
@@ -178,18 +144,24 @@ public class UDPClient {
 
     static class InteractiveMenu implements Runnable {
         private DatagramSocket datagramSocket;
-        private UDPClient client;
+        private Client client;
         private List<String> filenamesToPublish;
         private List<String> filenamesToRemove;
         private File directory = new File(".");
         private InetAddress updatedClientAddress;
         private Integer updatedClientPort;
         private Integer fileCount = 0;
+        private Integer requestNumber = 0;
 
-        InteractiveMenu(DatagramSocket datagramSocket, UDPClient client){
+        InteractiveMenu(DatagramSocket datagramSocket, Client client){
             this.datagramSocket = datagramSocket;
             this.client = client;
         }
+
+        public Integer incrementRequestNumber() {
+            return requestNumber++;
+        }
+
         @Override
         public void run() {
 
@@ -202,12 +174,12 @@ public class UDPClient {
                     // Reading user input
                     int choice = scanner.nextInt();
                     scanner.nextLine();
-                    client.incrementRequestNumber();
+                    incrementRequestNumber();
 
                     switch (choice) {
                         case 1:
-                            Message msg = new Message(Type.REGISTER, client.getClientRequestNumber(), client.getClientName(), client.getClientAddress(), client.getClientPort());
-                            msg.send(serverAddress, serverPort, datagramSocket);
+                            Message msg = new Message(Type.REGISTER, requestNumber, client.getClientName(), client.getClientAddress(), client.getClientPort());
+                            msg.send(serverAddress, SERVER_PORT, datagramSocket);
                             break;
 
                         case 2:
@@ -232,13 +204,13 @@ public class UDPClient {
                                     fileCount--;
                                 }
                             }
-                            msg = new Message(Type.PUBLISH, client.getClientRequestNumber(), client.getClientName(), filenamesToPublish);
-                            msg.send(serverAddress, serverPort, datagramSocket);
+                            msg = new Message(Type.PUBLISH, requestNumber, client.getClientName(), filenamesToPublish);
+                            msg.send(serverAddress, SERVER_PORT, datagramSocket);
                             break;
 
                         case 3:
-                            msg = new Message(Type.DEREGISTER, client.getClientRequestNumber(), client.getClientName());
-                            msg.send(serverAddress, serverPort, datagramSocket);
+                            msg = new Message(Type.DEREGISTER, requestNumber, client.getClientName());
+                            msg.send(serverAddress, SERVER_PORT, datagramSocket);
                             break;
 
                         case 4:
@@ -263,8 +235,8 @@ public class UDPClient {
                                     fileCount--;
                                 }
                             }
-                            msg = new Message(Type.REMOVE, client.getClientRequestNumber(), client.getClientName(), filenamesToRemove);
-                            msg.send(serverAddress, serverPort, datagramSocket);
+                            msg = new Message(Type.REMOVE, requestNumber, client.getClientName(), filenamesToRemove);
+                            msg.send(serverAddress, SERVER_PORT, datagramSocket);
                             break;
 
                         case 5:
@@ -275,7 +247,7 @@ public class UDPClient {
                             String filename = scanner.nextLine();
 
                             // Send FILE_REQ message
-                            Message fileReq = new Message(Type.FILE_REQ, client.getClientRequestNumber(), filename);
+                            Message fileReq = new Message(Type.FILE_REQ, requestNumber, filename);
                             fileReq.send(InetAddress.getByName(peerIp), peerPort, datagramSocket);
                             break;
 
@@ -292,15 +264,15 @@ public class UDPClient {
                                     System.out.println("Enter new IP address: ");
                                     String newAddress = scanner.next();
                                     updatedClientAddress = InetAddress.getByName(newAddress);
-                                    msg = new Message(Type.UPDATE, client.getClientRequestNumber(), client.getClientName(), updatedClientAddress, client.getClientPort());
-                                    msg.send(serverAddress, serverPort, datagramSocket);
+                                    msg = new Message(Type.UPDATE, requestNumber, client.getClientName(), updatedClientAddress, client.getClientPort());
+                                    msg.send(serverAddress, SERVER_PORT, datagramSocket);
                                     break;
                                     
                                 case 2:
                                     System.out.println("Enter new port number: ");
                                     updatedClientPort = scanner.nextInt();
-                                    msg = new Message(Type.UPDATE, client.getClientRequestNumber(), client.getClientName(), client.getClientAddress(), updatedClientPort);
-                                    msg.send(serverAddress, serverPort, datagramSocket);
+                                    msg = new Message(Type.UPDATE, requestNumber, client.getClientName(), client.getClientAddress(), updatedClientPort);
+                                    msg.send(serverAddress, SERVER_PORT, datagramSocket);
                                     break;
 
                                 case 3:
@@ -310,15 +282,13 @@ public class UDPClient {
                                     System.out.println("Enter new port number: ");
                                     updatedClientPort = scanner.nextInt();
                                     scanner.nextLine();
-                                    msg = new Message(Type.UPDATE, client.getClientRequestNumber(), client.getClientName(), client.getClientAddress(), updatedClientPort);
-                                    msg.send(serverAddress, serverPort, datagramSocket);
+                                    msg = new Message(Type.UPDATE, requestNumber, client.getClientName(), client.getClientAddress(), updatedClientPort);
+                                    msg.send(serverAddress, SERVER_PORT, datagramSocket);
                                     break;
-
                                 default:
                                     break;
                             }
                             break;
-
                         case 7:
                             break loop;
                         default:
@@ -348,18 +318,18 @@ public class UDPClient {
             try {
                 Socket tcpSocket = new Socket(destinationIp, socketNumber);
                 System.out.println("Client waiting for file");
+                // CORRECT FILENAME
                 BufferedWriter bw = new BufferedWriter(new FileWriter("temp.txt"));
-                Message file = null;
-                while (file == null || !file.getType().equals(Type.FILE_END)) {
+                Message fileMessage = null;
+                while (fileMessage == null || !fileMessage.getType().equals(Type.FILE_END)) {
                     // ADD TIMEOUT IF CLIENT DOES NOT RECEIVE ANYTHING
-                    file = Message.receive(tcpSocket);
-                    System.out.println("Client received " + file.toString());
+                    fileMessage = Message.receive(tcpSocket);
+                    System.out.println("Client received " + fileMessage.toString());
                     // Put file back together
-                    bw.write(file.getText());
+                    bw.write(fileMessage.getText());
                     bw.flush();
                 }
-                String filename = file.getName();
-                // RENAME AND ADD TO LIST OF OWNED FILE
+                String filename = fileMessage.getName();
                 bw.close();
                 tcpSocket.close();
             } catch (Exception e) {
@@ -390,17 +360,22 @@ public class UDPClient {
         @Override
         public void run() {
             try  {
-                ServerSocket server = new ServerSocket(socketNumber, BACKLOG_SIZE, InetAddress.getLocalHost());
-                server.setSoTimeout(CONNECTION_DELAY);
-                Socket destination = server.accept();
-                // Setup to read textFile character by character
+                // Accept the TCP connection
+                ServerSocket sender = new ServerSocket(socketNumber, BACKLOG_SIZE, InetAddress.getLocalHost());
+                sender.setSoTimeout(CONNECTION_DELAY);
+                Socket receiver = sender.accept();
+
+                // Setup to read text file character by character
                 TextFile textFile = new TextFile(new File(filename));
                 FileReader fr = new FileReader(textFile.getFile());
                 BufferedReader br = new BufferedReader(fr);
                 char[] buffer = new char[MAX_CHAR];
                 int ch;
                 int chunk = 1;
+
+                // Initialize file message
                 Message msg = new Message(Type.FILE, rq, filename);
+
                 // Read the textFile character by character
                 while ((ch = br.read(buffer, FILE_OFFSET, buffer.length)) != EOF) {
                     String text = new String(buffer, FILE_OFFSET, ch); // Get the text
@@ -410,11 +385,11 @@ public class UDPClient {
                     if(text.toCharArray().length < MAX_CHAR) { // Special END_FILE message for last chunk
                         msg.setType(Type.FILE_END);
                     }
-                    msg.send(destination); // Send the message over TCP socket
+                    msg.send(receiver); // Send the message over TCP socket
                 }
-                // Close the sockets created to receive the file
-                destination.close();
-                server.close();
+                // Close the sockets created to send the file
+                receiver.close();
+                sender.close();
             } catch(SocketTimeoutException e){
                 System.err.println("Timeout waiting for client connection");
             } catch (Exception e) {

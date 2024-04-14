@@ -14,17 +14,12 @@ public class Message implements Serializable {
     private String name;
     private InetAddress ipAddress;
     private Integer socketNum;
-    private Integer UDPport;
     private List<String> filenames;
     private List<Client> clients;
 
     // Client to client
     private Integer chunk;
     private String text;
-
-    public Integer getUDPport() {
-        return UDPport;
-    }
 
     public Reason getReason() {
         return reason;
@@ -38,12 +33,16 @@ public class Message implements Serializable {
         return ipAddress;
     }
 
-    public Integer getSocket() {
+    public Integer getSocketNum() {
         return socketNum;
     }
 
     public List<String> getFiles() {
         return filenames;
+    }
+
+    public List<Client> getClients() {
+        return clients;
     }
 
     public Type getType() {
@@ -157,7 +156,6 @@ public class Message implements Serializable {
         ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
         out.writeObject(this);
         out.flush();
-
     }
 
     // Send message over UDP
@@ -174,7 +172,7 @@ public class Message implements Serializable {
     }
 
     // Receive message over TCP
-    public static Message receive(Socket socket) throws IOException, ClassNotFoundException {
+    public static Message receive(Socket socket) {
         Message msg = null;
         try {
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
