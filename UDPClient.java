@@ -69,7 +69,6 @@ public class UDPClient {
 
             // Start listening to port for incoming UDP packets
             datagramSocket = new DatagramSocket(client.getClientPort());
-            datagramSocket.setSoTimeout(5000);
             buffer = new byte[BUFFER_SIZE];
             DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
             System.out.println("Client listening to port " + client.getClientPort());
