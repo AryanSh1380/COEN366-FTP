@@ -1,11 +1,7 @@
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.net.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
 import java.util.concurrent.Semaphore;
 
 public class UDPServer {
@@ -14,12 +10,28 @@ public class UDPServer {
     static private DatagramSocket socket;
     static private Timer timer;
     static private Semaphore s = new Semaphore(1);
-    static private int serverPort = 2308;
-    static private long timerPeriod = 10000;
+    static private int serverPort;
+    static private long timerPeriod = 60000;
+    static private int archiveServerPort;
+    static private InetAddress archiveServerIPaddress;
     //static private Message response;
+	private static final Integer BUFFER_SIZE = 65535;
+	
     public static void main(String[] args) {
         try {
+            // Initialize client information
+            Scanner sc = new Scanner(System.in);
+            System.out.println("Enter archive server address and port ");
+            archiveServerIPaddress = InetAddress.getByName(sc.nextLine());
+			archiveServerPort = sc.nextInt();
+			sc.nextLine();
+            System.out.println("Enter server port ");
+            serverPort = sc.nextInt();
+            sc.nextLine();
+            System.out.println("Server is running at: " + InetAddress.getLocalHost().toString() + ":" + serverPort);
             socket = new DatagramSocket(serverPort);
+			byte[] buffer = new byte[BUFFER_SIZE];
+                DatagramPacket request = new DatagramPacket(buffer, buffer.length);
             timer = new Timer();
             timer.schedule(new TimerTask() {
                 @Override
@@ -28,9 +40,8 @@ public class UDPServer {
                 }
             }, 0, timerPeriod);
             while(!socket.isClosed()) {
-                System.out.println("Server is running at: " + InetAddress.getLocalHost().toString() + ":" + serverPort);
-                byte[] buffer = new byte[1024];
-                DatagramPacket request = new DatagramPacket(buffer, buffer.length);
+
+                
                 socket.receive(request);
 
                 byte[] receivedData = request.getData();
@@ -69,6 +80,12 @@ public class UDPServer {
                         // response = handleUpdateCommand(msg);
                         // response.send(clientAddress,clientPort,socket);
                         break;
+                    case UPDATE_SERVER:
+                        Thread updateServer = new Thread(new InitServer(msg, clientAddress,clientPort));
+                        updateServer.start();
+                        // response = handleUpdateCommand(msg);
+                        // response.send(clientAddress,clientPort,socket);
+                        break;
                     default:
                         System.out.println("Unknown command type");
                         // Handle unknown command type
@@ -89,21 +106,46 @@ public class UDPServer {
         }
     }
 
-    public static void updateAllClients(DatagramSocket socket) {
+    static class InitServer implements Runnable {
+        private List<Client> archivedClients = new ArrayList<>();
+        InitServer(Message msg, InetAddress destinationAddress, Integer destinationPort) {
+            this.archivedClients = msg.getClients();
+			
+        }
+
+        @Override
+        public void run() {
             try {
                 s.acquire();
-                if(!clients.isEmpty()) {
-                    Message updateClient = new Message(Type.UPDATE, clients);
-                    for (Client client : clients) {
-                        updateClient.send(client.getClientAddress(), client.getClientPort(), socket);
-                    }
-                    System.out.println(updateClient.toString());
+                if (clients.isEmpty() && !(clients.equals(archivedClients))) {
+                    clients = archivedClients;
+                    System.out.println("Clients list retrieved from archive");
                 }
-            } catch(Exception e){
+            } catch (Exception e) {
                 e.printStackTrace();
             } finally {
-              s.release();
+                s.release();
             }
+        }
+    }
+
+    public static void updateAllClients(DatagramSocket socket) {
+        try {
+            s.acquire();
+            if(!clients.isEmpty()) {
+                Message updateClient = new Message(Type.UPDATE, clients);
+                for (Client client : clients) {
+                    updateClient.send(client.getClientAddress(), client.getClientPort(), socket);
+                }
+                System.out.println(updateClient.toString());
+                updateClient.send(archiveServerIPaddress, archiveServerPort, socket);
+            }
+
+        } catch(Exception e){
+            e.printStackTrace();
+        } finally {
+          s.release();
+        }
     }
 
     static class UpdateThread implements Runnable {
@@ -119,7 +161,7 @@ public class UDPServer {
             REQnumb = msg.getRq();
             clientName = msg.getName();
             updatedclientAddress = msg.getIpAddress();
-            updatedclientPort = msg.getUDPport();
+            updatedclientPort = msg.getSocketNum();
             this.destinationAddress = destinationAddress;
             this.destinationPort = destinationPort;
         }
@@ -143,15 +185,10 @@ public class UDPServer {
                     } else {
                         for (Client client : clients) {
                             if (clientName.equals(client.getClientName())) {
-                                if (updatedclientAddress.equals(client.getClientAddress())) {
-                                    client.updateClientPort(updatedclientPort);
-                                    System.out.println("IP Address remains the same, UDP Port is being updated...");
-                                    response = new Message(Type.UPDATE_CONFIRMED, REQnumb, clientName, updatedclientAddress, updatedclientPort);
-                                } else {
-                                    client.updateClientAddress(updatedclientAddress);
-                                    client.updateClientPort(updatedclientPort);
-                                    response = new Message(Type.UPDATE_CONFIRMED, REQnumb, clientName, updatedclientAddress, updatedclientPort);
-                                }
+                                client.updateClientAddress(updatedclientAddress);
+                                client.updateClientPort(updatedclientPort);
+                                response = new Message(Type.UPDATE_CONFIRMED, REQnumb, clientName, updatedclientAddress, updatedclientPort);
+                                ServerUpdate = true;
                                 timer.cancel();
                                 timer = new Timer();
                                 timer.schedule(new TimerTask() {
@@ -179,7 +216,6 @@ public class UDPServer {
         private Message response;
         private int REQnumb;
         private String clientName;
-        private boolean clientNameDNE;
         private InetAddress destinationAddress;
         private Integer destinationPort;
 
@@ -188,7 +224,6 @@ public class UDPServer {
             REQnumb = msg.getRq();
             clientName = msg.getName();
             filenamesToRemove = msg.getFiles();
-            clientNameDNE = true;
             this.destinationAddress = destinationAddress;
             this.destinationPort = destinationPort;
         }
@@ -197,33 +232,44 @@ public class UDPServer {
         public void run() {
             try{
                 if(!clients.isEmpty()){
+					boolean clientNameDNE = false;
                     for (Client client : clients) {
                         String name = client.getClientName();
                         if (name != null && name.equals(clientName)) {
+                            boolean filesRemoved = false;
                             for (String fileToRemove : filenamesToRemove) {
-                                client.removeFileFromList(fileToRemove);
-                            }
-                            response = new Message(Type.REMOVED, REQnumb);
-                            ServerUpdate = true;
-                            timer.cancel();
-                            timer = new Timer();
-                            timer.schedule(new TimerTask() {
-                                @Override
-                                public void run() {
-                                    UDPServer.updateAllClients(socket);
+                                if (client.getListOfPublishedFiles().contains(fileToRemove)) {
+                                    client.removeFileFromList(fileToRemove);
+                                    filesRemoved = true;
                                 }
-                            }, 0, timerPeriod);
-                            clientNameDNE = false;
-                            break;
+                                if (filesRemoved) {
+                                    response = new Message(Type.REMOVED, REQnumb);
+                                    response.send(destinationAddress, destinationPort, socket);
+                                    ServerUpdate = true;
+                                    timer.cancel();
+                                    timer = new Timer();
+                                    timer.schedule(new TimerTask() {
+                                        @Override
+                                        public void run() {
+                                            UDPServer.updateAllClients(socket);
+                                        }
+                                    }, 0, timerPeriod);
+                                    clientNameDNE = false;
+                                    break;
+                                } else {
+                                    response = new Message(Type.REMOVE_DENIED, REQnumb, Reason.FILE_NOT_FOUND);
+                                    response.send(destinationAddress, destinationPort, socket);
+                                }
+                            }
                         }
                     }
                     if (clientNameDNE) {
                         response = new Message(Type.REMOVE_DENIED, REQnumb, Reason.CLIENT_NAME_DNE);
+                        response.send(destinationAddress, destinationPort, socket);
                     }
                 } else {
                     System.out.println("Client list is empty.");
                 }
-                response.send(destinationAddress, destinationPort, socket);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -235,7 +281,6 @@ public class UDPServer {
         private Message response;
         private int REQnumb;
         private String clientName;
-        private boolean clientNameDNE;
         private InetAddress destinationAddress;
         private Integer destinationPort;
 
@@ -244,7 +289,6 @@ public class UDPServer {
             REQnumb = msg.getRq();
             filenamesToPublish = msg.getFiles();
             clientName = msg.getName();
-            clientNameDNE = true;
             this.destinationAddress = destinationAddress;
             this.destinationPort = destinationPort;
         }
@@ -254,33 +298,50 @@ public class UDPServer {
         public void run() {
             try {
                 if(!clients.isEmpty()){
+					boolean clientNameDNE = false;
                     for (Client client : clients) {
                         String name = client.getClientName();
                         if (name != null && name.equals(clientName)) {
+                            boolean filesPublished = false;
+                            List<String> duplicateFiles = new ArrayList<>();
                             for (String fileToAdd : filenamesToPublish) {
-                                client.addFileToList(fileToAdd);
-                            }
-                            response = new Message(Type.PUBLISHED, REQnumb);
-                            ServerUpdate = true;
-                            timer.cancel();
-                            timer = new Timer();
-                            timer.schedule(new TimerTask() {
-                                @Override
-                                public void run() {
-                                    UDPServer.updateAllClients(socket);
+                                if(!client.getListOfPublishedFiles().contains(fileToAdd)) {
+                                    client.addFileToList(fileToAdd);
+                                    filesPublished = true;
+                                } else {
+                                    duplicateFiles.add(fileToAdd);
                                 }
-                            }, 0, timerPeriod);
-                            clientNameDNE = false;
-                            break;
+                            }
+                            if(duplicateFiles.size() > 0) {
+                                for (String filename : duplicateFiles) {
+                                    response = new Message(Type.PUBLISH_DENIED, REQnumb, Reason.DUPLICATE_FILE);
+                                    response.send(destinationAddress, destinationPort, socket);
+                                }
+                            }
+                            if (filesPublished) {
+                                response = new Message(Type.PUBLISHED, REQnumb);
+                                response.send(destinationAddress, destinationPort, socket);
+                                ServerUpdate = true;
+                                timer.cancel();
+                                timer = new Timer();
+                                timer.schedule(new TimerTask() {
+                                    @Override
+                                    public void run() {
+                                        UDPServer.updateAllClients(socket);
+                                    }
+                                }, 0, timerPeriod);
+                                clientNameDNE = false;
+                                break;
+                            }
                         }
                     }
                     if (clientNameDNE) {
                         response = new Message(Type.PUBLISH_DENIED, REQnumb, Reason.CLIENT_NAME_DNE);
+                        response.send(destinationAddress, destinationPort, socket);
                     }
                 } else {
                     System.out.println("Client list is empty.");
                 }
-                response.send(destinationAddress, destinationPort, socket);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -358,7 +419,7 @@ public class UDPServer {
             REQnumb = msg.getRq();
             clientName = msg.getName();
             clientAddress = msg.getIpAddress();
-            clientPort = msg.getSocket();
+            clientPort = msg.getSocketNum();
             clientNameExists = false;
             this.destinationAddress = destinationAddress;
             this.destinationPort = destinationPort;
@@ -394,6 +455,14 @@ public class UDPServer {
                         clients.add(newClient);
                         response = new Message(Type.REGISTERED, REQnumb);
                         ServerUpdate = true;
+                        timer.cancel();
+                        timer = new Timer();
+                        timer.schedule(new TimerTask() {
+                            @Override
+                            public void run() {
+                                UDPServer.updateAllClients(socket);
+                            }
+                        }, 0, timerPeriod);
                     } else {
                         response = new Message(Type.REGISTER_DENIED, REQnumb, Reason.CLIENT_NAME_ALREADY_IN_USE);
                     }
